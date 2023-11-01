@@ -1,0 +1,8 @@
+bitstring==4.1.2
+Deprecated==1.2.14
+joblib==1.3.2
+optimum==1.13.2
+pre-commit==3.5.0
+pybind==2.11.1
+# torch==2.1.0+cu121
+transformers==4.34.1
