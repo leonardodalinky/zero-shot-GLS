@@ -1,5 +1,6 @@
-from typing import Dict, Optional
-
+"""
+Fundamental search algorithms for LLMs.
+"""
 import torch
 import torch.nn.functional as F
 import transformers as tr
@@ -7,7 +8,9 @@ import transformers as tr
 
 @torch.no_grad()
 def compute_nsp_probs(
-    model, input_ids: torch.Tensor, attention_mask: Optional[torch.Tensor] = None
+    model,
+    input_ids: torch.Tensor,
+    attention_mask: torch.Tensor | None = None,
 ) -> torch.Tensor:
     """
     Predict the probability of next token.
@@ -75,7 +78,7 @@ def beam_search(
 def beam_search_end(
     model,
     input_ids: torch.Tensor,
-    attention_mask: Optional[torch.Tensor] = None,
+    attention_mask: torch.Tensor | None = None,
     eos_ids: int = [1, 29889, 29973, 29991],
 ) -> torch.Tensor:
     assert input_ids.dim() == 2, f"input_ids.dim() = {input_ids.dim()}"
@@ -105,7 +108,7 @@ def enhanced_greedy_search(
     capacity: float = 0.6,
     threshold: float = 5e-3,
     max_bits_len: int = 5,
-) -> Dict[str, torch.Tensor]:
+) -> dict[str, torch.Tensor]:
     """
     Args:
         model: Probably a LLaMa model.
@@ -143,8 +146,8 @@ def enhanced_greedy_search(
 
     ret_ids = torch.cat(
         [
-            input_ids.expand(trunc_cnt, -1),
-            sorted_probs_indice[:trunc_cnt].unsqueeze(1),
+            input_ids.repeat(trunc_cnt, -1),
+            sorted_probs_indice[:trunc_cnt, None],
         ],
         dim=-1,
     )
@@ -165,7 +168,7 @@ def enhanced_greedy_search(
 def enhanced_greedy_search_end(
     model,
     input_ids: torch.Tensor,
-    attention_mask: Optional[torch.Tensor] = None,
+    attention_mask: torch.Tensor | None = None,
     eos_ids: int = [1, 29889, 29973, 29991],
 ) -> torch.Tensor:
     return beam_search_end(model, input_ids, attention_mask=attention_mask, eos_ids=eos_ids)
