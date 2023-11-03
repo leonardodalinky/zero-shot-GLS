@@ -110,7 +110,7 @@ def decode_bitstream(model: GPT2Model, bits: ConstBitStream) -> torch.Tensor:
 
 def wrap_bits(
     bits: ConstBitStream,
-    size_flag_bits=10,
+    size_flag_bits=8,
     ef_rounds=4,
     **kwargs,
 ) -> ConstBitStream:
@@ -119,7 +119,7 @@ def wrap_bits(
     Args:
         bits (ConstBitStream): Bitstream.
         size_flag_bits (int, optional): Number of bits to indicate the size of the bitstream.
-            Defaults to 10, i.e. maximum of 1024 bits.
+            Defaults to 8, i.e. maximum of 256 bits.
         ef_rounds (int, optional): Number of EF rounds. Defaults to 4.
     """
     size_bs = ConstBitStream(uint=len(bits), length=size_flag_bits)
@@ -132,7 +132,7 @@ def wrap_bits(
 
 def unwrap_bits(
     bits: ConstBitStream,
-    size_flag_bits=10,
+    size_flag_bits=8,
     ef_rounds=4,
     **kwargs,
 ) -> ConstBitStream:
@@ -141,7 +141,7 @@ def unwrap_bits(
     Args:
         bits (ConstBitStream): Bitstream.
         size_flag_bits (int, optional): Number of bits to indicate the size of the bitstream.
-            Defaults to 10, i.e. maximum of 1024 bits.
+            Defaults to 8, i.e. maximum of 256 bits.
         ef_rounds (int, optional): Number of EF rounds. Defaults to 4.
     """
     bs = bits
