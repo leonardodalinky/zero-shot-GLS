@@ -7,7 +7,7 @@ import warnings
 import torch
 import torch.nn.functional as F
 from bitstring import Bits, BitStream, ConstBitStream
-from transformers import GPT2Model
+from transformers import GPT2LMHeadModel
 from zgls_utils import huffman
 
 THRES = 1e-8
@@ -19,15 +19,16 @@ class DecodeException(Exception):
 
 @torch.no_grad()
 def encode_token_ids(
-    model: GPT2Model,
+    model: GPT2LMHeadModel,
     input_ids: torch.Tensor,
     max_bits_len: int = 256,
+    add_bos_token: bool = True,
 ) -> BitStream:
     """Encode token ids of plaintext into a bitstream.
 
     Args:
-        model (GPT2Model): GPT2 model.
-        input_ids (torch.Tensor): Token ids of plaintext. (1, seq_len)
+        model (GPT2LMHeadModel): GPT2 model.
+        input_ids (torch.Tensor): Token ids of plaintext, must begin with <bos>. (1, seq_len)
         max_bits_len (int, optional): Maximum length of the bitstream. Defaults to 256.
     """
     assert input_ids.dim() == 2, "input_ids must be (1, seq_len)."
@@ -35,8 +36,16 @@ def encode_token_ids(
     assert (
         input_ids.size(1) > 1
     ), "input_ids must have at least 2 tokens. The first should be <bos>."
-    if input_ids[0, 0] != model.config.bos_token_id:
-        warnings.warn("input_ids does not start with <bos> token.")
+    if add_bos_token:
+        input_ids = torch.cat(
+            [
+                torch.tensor([[model.config.bos_token_id]], dtype=torch.long, device=model.device),
+                input_ids,
+            ],
+            dim=-1,
+        )
+    assert input_ids[0, 0] == model.config.bos_token_id, "input_ids must start with <bos> token."
+    assert input_ids[0, -1] != model.config.eos_token_id, "input_ids must not end with <eos> token."
 
     ret = BitStream()
 
@@ -46,15 +55,14 @@ def encode_token_ids(
         )  # (vocab_size)
         probs = F.softmax(logits, dim=-1)
         probs = F.threshold(probs, THRES, THRES, inplace=True)
-        freqs = freqs.round_().double()  # (vocab_size)
-        freq: list[float] = freqs.tolist()
+        freqs: list[float] = probs.tolist()
 
-        i2f: dict[int, float] = {i: f for i, f in enumerate(freq)}
+        i2f = {i: f for i, f in enumerate(freqs)}
         codec_table = huffman.from_frequencies(i2f)
         hf_str = codec_table[input_ids[0, seq_idx + 1].item()]
         if len(ret) + len(hf_str) > max_bits_len:
             # if we are about to exceed the max bits length, we stop encoding
-            return ret, input_ids[:, : seq_idx + 1]
+            return ret
 
         ret += Bits("0b" + hf_str)
 
@@ -62,12 +70,19 @@ def encode_token_ids(
 
 
 @torch.no_grad()
-def decode_bitstream(model: GPT2Model, bits: ConstBitStream) -> torch.Tensor:
+def decode_bitstream(
+    model: GPT2LMHeadModel,
+    bits: ConstBitStream,
+    remove_bos_token: bool = True,
+) -> torch.Tensor:
     """Decode a bitstream into token ids of plaintext.
 
     Args:
-        model (GPT2Model): GPT2 model.
+        model (GPT2LMHeadModel): GPT2 model.
         bits (ConstBitStream): Bitstream.
+
+    Returns:
+        torch.Tensor: Token ids of plaintext, without any special tokens. (1, seq_len)
     """
     assert len(bits) > 0, "bits is empty."
 
@@ -79,11 +94,9 @@ def decode_bitstream(model: GPT2Model, bits: ConstBitStream) -> torch.Tensor:
         logits: torch.Tensor = model(cur_ids).logits[0, -1].to(dtype=torch.float64)  # (vocab_size)
         probs = F.softmax(logits, dim=-1)
         probs = F.threshold(probs, THRES, THRES, inplace=True)
-        freqs: torch.Tensor = probs / probs.min()  # (1, seq_len, vocab_size)
-        freqs = freqs.round_().long()  # (vocab_size)
-        freq = freqs.tolist()
+        freqs: list[float] = probs.tolist()
 
-        i2f = {i: f for i, f in enumerate(freq)}
+        i2f = {i: f for i, f in enumerate(freqs)}
         codec_table = huffman.from_frequencies(i2f)
         rev_table = {v: k for k, v in codec_table.items()}
         max_bits_len = max(len(v) for v in codec_table.values())
@@ -105,12 +118,14 @@ def decode_bitstream(model: GPT2Model, bits: ConstBitStream) -> torch.Tensor:
             dim=-1,
         )
 
+    if remove_bos_token and cur_ids[0, 0] == model.config.bos_token_id:
+        cur_ids = cur_ids[:, 1:]
     return cur_ids.to(device=model.device)
 
 
 def wrap_bits(
     bits: ConstBitStream,
-    size_flag_bits=8,
+    size_bits=8,
     ef_rounds=4,
     **kwargs,
 ) -> ConstBitStream:
@@ -122,7 +137,7 @@ def wrap_bits(
             Defaults to 8, i.e. maximum of 256 bits.
         ef_rounds (int, optional): Number of EF rounds. Defaults to 4.
     """
-    size_bs = ConstBitStream(uint=len(bits), length=size_flag_bits)
+    size_bs = ConstBitStream(uint=len(bits), length=size_bits)
     bs = size_bs + bits
     for _ in range(max(ef_rounds, 0)):
         bs = _ef_encode(bs)
@@ -132,7 +147,7 @@ def wrap_bits(
 
 def unwrap_bits(
     bits: ConstBitStream,
-    size_flag_bits=8,
+    size_bits=8,
     ef_rounds=4,
     **kwargs,
 ) -> ConstBitStream:
@@ -148,15 +163,11 @@ def unwrap_bits(
     for _ in range(max(ef_rounds, 0)):
         bs = _ef_decode(bits)
 
-    prefix_len = size_flag_bits
-    assert len(bits) >= prefix_len, f"bits length is too short. {len(bits)} < {prefix_len}"
-    valid_len = bits.peek(f"uint:{size_flag_bits}")
+    prefix_len = size_bits
+    assert len(bs) >= prefix_len, f"bits length is too short. {len(bits)} < {prefix_len}"
+    valid_len = bs.peek(f"uint:{size_bits}")
 
-    bs = bits[prefix_len : prefix_len + valid_len]
-    for _ in range(ef_rounds):
-        bs = _ef_decode(bs)
-
-    return ConstBitStream(bs)
+    return ConstBitStream(bs[prefix_len : prefix_len + valid_len])
 
 
 def bits2base64(bits: ConstBitStream) -> str:
