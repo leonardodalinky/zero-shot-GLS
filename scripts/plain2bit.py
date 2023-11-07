@@ -1,7 +1,7 @@
 """Plain-text to bitstring.
 
 Usage:
-    TODO
+    python plain2bit.py -o imdb_s1.csv --n-rows 16000 imdb.csv
 """
 import argparse
 import csv
@@ -12,6 +12,7 @@ import sys
 from typing import Any
 
 import torch
+from bitstring import BitStream
 from tqdm import tqdm
 
 os.environ["HF_HOME"] = f"{osp.dirname(__file__)}/../tmp_saves/hg_cache"
@@ -36,7 +37,7 @@ def parse_args():
         "-d",
         "--dst-col",
         type=str,
-        default="bits",
+        default="enc_bits",
         help="Column name of destination bitstring. [Default: enc_bits]",
     )
     parser.add_argument(
@@ -109,14 +110,13 @@ def encode(
     tokenizer: GPT2Tokenizer,
     plaintext: str,
 ) -> str:
-    """Encode plain-text to bitstring.
+    """Encode plaintext to bitstring.
 
     Args:
+        args (argparse.Namespace): Command-line arguments.
         model (GPT2Model): GPT-2 model.
         tokenizer (GPT2Tokenizer): GPT-2 tokenizer.
         plaintext (str): Plain-text.
-        size_bits (int): Number of size bits.
-        ef_rounds (int): Number of EF rounds.
 
     Returns:
         str: Bitstring encoded in Base64 format.
@@ -137,8 +137,9 @@ def encode(
         max_bits_len=(2**args.size_bits - args.size_bits - 1),
     )
     # pad to multiple of 8 bits
-    bs.append("0b0" * (8 - len(bs) % 8))
     bs = codec.wrap_bits(bs, size_bits=args.size_bits, ef_rounds=args.ef_rounds)
+    bs = BitStream(bs)
+    bs.append("0b0" * (8 - len(bs) % 8))
     return codec.bits2base64(bs)
 
 
@@ -155,8 +156,6 @@ if __name__ == "__main__":
     ###################
     logging.info(f"Loading input data: {args.input}.")
     with open(args.input, "r") as fp:
-        # dialect = csv.Sniffer().sniff(fp.read(1024))
-        # fp.seek(0)
         reader = csv.DictReader(fp)
         input_fieldnames = list(reader.fieldnames)
         input_data: list[dict[str, Any]] = list(reader)
@@ -181,6 +180,9 @@ if __name__ == "__main__":
     #    prepare model    #
     #                     #
     #######################
+    os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
+    torch.use_deterministic_algorithms(True, warn_only=True)
+
     logging.info("Loading GPT-2 model.")
     model = GPT2LMHeadModel.from_pretrained("gpt2-medium", device_map=0)  # move to GPU:0
     model.eval()
@@ -191,9 +193,9 @@ if __name__ == "__main__":
     #    bit enc    #
     #               #
     #################
-    if args.force:
+    if args.force and osp.exists(args.output):
         logging.warning(f"Overwriting output file.")
-    logging.info(f"Encoding plain-text to bitstring. Output file: {args.output}.")
+    logging.info(f"Encoding plaintext to bitstring. Output file: {args.output}.")
     os.makedirs(osp.dirname(args.output), exist_ok=True)
     with open(args.output, "w") as fp:
         writer = csv.DictWriter(fp, fieldnames=input_fieldnames + [args.dst_col])

@@ -2,7 +2,6 @@
 Low-level module for codec using GPT-2 model to convert between token ids and bits.
 """
 import base64
-import warnings
 
 import torch
 import torch.nn.functional as F
@@ -161,10 +160,10 @@ def unwrap_bits(
     """
     bs = bits
     for _ in range(max(ef_rounds, 0)):
-        bs = _ef_decode(bits)
+        bs = _ef_decode(bs)
 
     prefix_len = size_bits
-    assert len(bs) >= prefix_len, f"bits length is too short. {len(bits)} < {prefix_len}"
+    assert len(bs) >= prefix_len, f"bits length is too short. {len(bs)} < {prefix_len}"
     valid_len = bs.peek(f"uint:{size_bits}")
 
     return ConstBitStream(bs[prefix_len : prefix_len + valid_len])
