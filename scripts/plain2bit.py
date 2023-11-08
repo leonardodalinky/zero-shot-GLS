@@ -21,6 +21,7 @@ sys.path.append(f"{osp.dirname(osp.abspath(__file__))}/../src")
 from transformers import GPT2LMHeadModel, GPT2Tokenizer
 
 import codec
+from p_utils import seed_everything
 
 
 def parse_args():
@@ -105,15 +106,16 @@ def parse_args():
 
 @torch.no_grad()
 def encode(
-    args: argparse.Namespace,
     model: GPT2LMHeadModel,
     tokenizer: GPT2Tokenizer,
     plaintext: str,
+    max_token_lengh: int,
+    size_bits: int,
+    ef_rounds: int,
 ) -> str:
     """Encode plaintext to bitstring.
 
     Args:
-        args (argparse.Namespace): Command-line arguments.
         model (GPT2Model): GPT-2 model.
         tokenizer (GPT2Tokenizer): GPT-2 tokenizer.
         plaintext (str): Plain-text.
@@ -125,7 +127,7 @@ def encode(
     token_ids: torch.Tensor = tokenizer(
         plaintext,
         return_tensors="pt",
-        max_length=args.max_token_length,
+        max_length=max_token_lengh,
         truncation=True,
     ).input_ids.to(
         device
@@ -134,10 +136,10 @@ def encode(
         model,
         token_ids,
         add_bos_token=True,
-        max_bits_len=(2**args.size_bits - args.size_bits - 1),
+        max_bits_len=(2**size_bits - size_bits - 1),
     )
     # pad to multiple of 8 bits
-    bs = codec.wrap_bits(bs, size_bits=args.size_bits, ef_rounds=args.ef_rounds)
+    bs = codec.wrap_bits(bs, size_bits=size_bits, ef_rounds=ef_rounds)
     bs = BitStream(bs)
     bs.append("0b0" * (8 - len(bs) % 8))
     return codec.bits2base64(bs)
@@ -149,6 +151,7 @@ if __name__ == "__main__":
         format="%(asctime)s [%(levelname)s] %(message)s",
     )
     args = parse_args()
+    seed_everything(42, deterministic=True, warn_only=True)
     ###################
     #                 #
     #    load data    #
@@ -180,11 +183,10 @@ if __name__ == "__main__":
     #    prepare model    #
     #                     #
     #######################
-    os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
-    torch.use_deterministic_algorithms(True, warn_only=True)
-
     logging.info("Loading GPT-2 model.")
-    model = GPT2LMHeadModel.from_pretrained("gpt2-medium", device_map=0)  # move to GPU:0
+    model = GPT2LMHeadModel.from_pretrained(
+        "gpt2-medium", device_map=0, local_files_only=True
+    )  # move to GPU:0
     model.eval()
     logging.info("Loading GPT-2 tokenizer.")
     tokenizer = GPT2Tokenizer.from_pretrained("gpt2-medium")
@@ -201,7 +203,14 @@ if __name__ == "__main__":
         writer = csv.DictWriter(fp, fieldnames=input_fieldnames + [args.dst_col])
         writer.writeheader()
         for row in tqdm(input_data[start_idx:end_idx], desc="Plain-To-Bits", dynamic_ncols=True):
-            bits_base64 = encode(args, model, tokenizer, row[args.src_col])
+            bits_base64 = encode(
+                model,
+                tokenizer,
+                row[args.src_col],
+                max_token_lengh=args.max_token_length,
+                size_bits=args.size_bits,
+                ef_rounds=args.ef_rounds,
+            )
             row[args.dst_col] = bits_base64
             writer.writerow(row)
     logging.info("Done.")

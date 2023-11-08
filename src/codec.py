@@ -13,7 +13,9 @@ THRES = 1e-8
 
 
 class DecodeException(Exception):
-    pass
+    def __init__(self, *args: object, token_ids: torch.Tensor) -> None:
+        super().__init__(*args)
+        self.token_ids: torch.Tensor = token_ids
 
 
 @torch.no_grad()
@@ -107,7 +109,10 @@ def decode_bitstream(
             if bit_str in rev_table:
                 break
         else:
-            raise DecodeException(f"Cannot find a match in the codec table. Got {bit_str}.")
+            raise DecodeException(
+                f"Cannot find a match in the codec table. Got {bit_str}.",
+                token_ids=cur_ids,
+            )
 
         cur_ids = torch.cat(
             [

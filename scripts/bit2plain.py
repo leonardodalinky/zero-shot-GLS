@@ -20,6 +20,7 @@ sys.path.append(f"{osp.dirname(osp.abspath(__file__))}/../src")
 from transformers import GPT2LMHeadModel, GPT2Tokenizer
 
 import codec
+from p_utils import seed_everything
 
 
 def parse_args():
@@ -98,10 +99,11 @@ def parse_args():
 
 @torch.no_grad()
 def decode(
-    args: argparse.Namespace,
     model: GPT2LMHeadModel,
     tokenizer: GPT2Tokenizer,
     bs_base64: str,
+    size_bits: int,
+    ef_rounds: int,
     sentence_id: int | None = None,
 ) -> str | None:
     """decode plaintext from bitstring.
@@ -118,14 +120,15 @@ def decode(
     """
     # decode base64
     bs = codec.base642bits(bs_base64)
-    bs = codec.unwrap_bits(bs, args.size_bits, args.ef_rounds)
+    bs = codec.unwrap_bits(bs, size_bits=size_bits, ef_rounds=ef_rounds)
     try:
         token_ids = codec.decode_bitstream(model, bs, remove_bos_token=True)  # [1, seq_len]
         # decode token_ids
         return tokenizer.decode(token_ids[0, :].tolist())
-    except codec.DecodeException:
+    except codec.DecodeException as e:
         logging.warning(f"Cannot decode bitstring #{sentence_id}.")
-        return None
+        cur_str = tokenizer.decode(e.token_ids[0, :].tolist())
+        return "<ERROR>: " + cur_str
 
 
 if __name__ == "__main__":
@@ -134,6 +137,7 @@ if __name__ == "__main__":
         format="%(asctime)s [%(levelname)s] %(message)s",
     )
     args = parse_args()
+    seed_everything(42, deterministic=True, warn_only=True)
     ###################
     #                 #
     #    load data    #
@@ -165,11 +169,10 @@ if __name__ == "__main__":
     #    prepare model    #
     #                     #
     #######################
-    os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
-    torch.use_deterministic_algorithms(True, warn_only=True)
-
     logging.info("Loading GPT-2 model.")
-    model = GPT2LMHeadModel.from_pretrained("gpt2-medium", device_map=0)  # move to GPU:0
+    model = GPT2LMHeadModel.from_pretrained(
+        "gpt2-medium", device_map=0, local_files_only=True
+    )  # move to GPU:0
     model.eval()
     logging.info("Loading GPT-2 tokenizer.")
     tokenizer = GPT2Tokenizer.from_pretrained("gpt2-medium")
@@ -187,10 +190,11 @@ if __name__ == "__main__":
         writer.writeheader()
         for row in tqdm(input_data[start_idx:end_idx], desc="Bits-To-Plain", dynamic_ncols=True):
             dec_plaintext = decode(
-                args,
                 model,
                 tokenizer,
                 row[args.src_col],
+                size_bits=args.size_bits,
+                ef_rounds=args.ef_rounds,
                 sentence_id=row.get("sentence_id"),
             )
             row[args.dst_col] = dec_plaintext
