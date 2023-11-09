@@ -1,18 +1,19 @@
 """Generating prompts for LLMs."""
 import contextlib
 import csv
+import random
 from functools import partial
 from pathlib import Path
 from typing import Literal
 
+import numpy as np
+import torch
+
+from prompt_template import COVER
+
 
 @contextlib.contextmanager
 def random_state(seed: int):
-    import random
-
-    import numpy as np
-    import torch
-
     # save state
     state = {
         "random": random.getstate(),
@@ -56,14 +57,28 @@ def gen_prompt_ctx(
             reader = csv.DictReader(f)
             assert cover_col in reader.fieldnames, f"Cover column '{cover_col}' not in {cover}."
             cover_text: list[str] = [row[cover_col] for row in reader]
-        # TODO: return func
         yield partial(cover_mode_prompt_gen, cover_text=cover_text)
     else:
         raise NotImplementedError(f"Mode '{mode}' is not implemented.")
 
 
-def cover_mode_prompt_gen(n: int, seed: int, cover_text: list[str]) -> str:
-    """Generate prompts for cover mode."""
+def cover_mode_prompt_gen(
+    n_ctx: int,
+    seed: int,
+    cover_text: list[str],
+    corpus: str = "Unknown",
+    **kwargs,
+) -> str:
+    """Generate prompts for cover mode.
+
+    Args:
+        n_ctx (int): Number of context sentences.
+        seed (int): Random seed.
+        cover_text (list[str]): Cover text.
+        corpus (str, optional): Corpus name. Defaults to "Unknown".
+    """
     with random_state(seed):
-        # TODO
-        raise NotImplementedError
+        # choose `n_ctx` context text
+        context = random.sample(cover_text, n_ctx)
+        context = "\n\n".join(context)
+        return COVER.substitute(corpus=corpus, context=context)

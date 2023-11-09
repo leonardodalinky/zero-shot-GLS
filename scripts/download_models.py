@@ -19,7 +19,7 @@ if __name__ == "__main__":
         max_memory={"cpu": "64GiB"},
     )
     # LlaMa2
-    model_name = "TheBloke/Llama-2-13B-chat-GPTQ"
+    model_name = "TheBloke/Llama-2-7B-chat-GPTQ"
     print(f"Downloading {model_name}")
     AutoTokenizer.from_pretrained(model_name)
     AutoModelForCausalLM.from_pretrained(

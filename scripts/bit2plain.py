@@ -24,21 +24,24 @@ from p_utils import seed_everything
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="Plain-text to bitstring.")
+    parser = argparse.ArgumentParser(
+        description="Plain-text to bitstring.",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+    )
     parser.add_argument("input", type=str, help="Input .csv file.")
     parser.add_argument(
         "-s",
         "--src-col",
         type=str,
         default="dec_bits",
-        help="Column name of source bitstring. [Default: dec_bits]",
+        help="Column name of source bitstring.",
     )
     parser.add_argument(
         "-d",
         "--dst-col",
         type=str,
         default="dec_plaintext",
-        help="Column name of destination decoded plaintext. [Default: dec_plaintext]",
+        help="Column name of destination decoded plaintext.",
     )
     parser.add_argument(
         "-o",
@@ -51,7 +54,7 @@ def parse_args():
         "-n",
         "--n-rows",
         type=int,
-        help="Number of rows to process. [Default: all]",
+        help="Number of rows to process. Defaults to all rows.",
     )
     parser.add_argument(
         "--skip",
@@ -73,13 +76,13 @@ def parse_args():
         "--size-bits",
         type=int,
         default=8,
-        help="Number of size bits. [Default: 8]",
+        help="Number of size bits.",
     )
     parser.add_argument(
         "--ef-rounds",
         type=int,
         default=4,
-        help="Number of EF rounds. [Default: 4]",
+        help="Number of EF rounds.",
     )
     ####################
     #                  #

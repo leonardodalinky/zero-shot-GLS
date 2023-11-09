@@ -1,8 +1,11 @@
 """
 Low-level module for hiding/extracting bits with prompt token ids to generate stego-text.
 """
+import warnings
+
 import torch
 from bitstring import BitStream, ConstBitStream
+from transformers import LlamaForCausalLM
 
 import search
 
@@ -20,7 +23,7 @@ import search
 #                                    #
 ######################################
 def hide_bits_with_prompt_ids(
-    model,
+    model: LlamaForCausalLM,
     prompt_input_ids: torch.Tensor,
     bits: ConstBitStream,
     method: str,
@@ -34,6 +37,10 @@ def hide_bits_with_prompt_ids(
         bits (ConstBitStream): Bitstream.
         method (str): Method to hide bits. Currently only support "egs" (enhanced greedy search).
     """
+    warnings.warn(
+        "This function is deprecated. Use hide_bits_with_prompt_ids_by_egs instead.",
+        DeprecationWarning,
+    )
     assert method in ["egs"]
     assert prompt_input_ids.dim() == 2, "prompt_input_ids must be (1, seq_len)."
     assert prompt_input_ids.size(0) == 1, "Only support batch size 1."
@@ -46,34 +53,36 @@ def hide_bits_with_prompt_ids(
 
 
 def hide_bits_with_prompt_ids_by_egs(
-    model,
-    prompt_input_ids: torch.Tensor,
+    model: LlamaForCausalLM,
+    prompt_ids: torch.Tensor,
     bits: ConstBitStream,
-    capacity: float = 0.6,
     threshold: float = 5e-3,
-    max_bits_len: int = 5,
+    max_bpw: int = 5,
+    max_new_tokens: int = None,
+    complete_sent: bool = False,
     **kwargs,
-) -> torch.Tensor:
+) -> tuple[torch.Tensor, bool]:
     """Implementation of enhanced greedy search.
 
     Args:
         model (PreTrainedModel): Model.
-        prompt_input_ids (torch.Tensor): Prompt token ids.
+        prompt_ids (torch.Tensor): Prompt token ids.
         bits (ConstBitStream): Bitstream.
-        capacity (float, optional): Capacity of the prompt. Defaults to 0.6.
         threshold (float, optional): Threshold of the prompt. Defaults to 5e-3.
-        max_bits_len (int, optional): Maximum length of the prompt. Defaults to 5.
+        max_bpw (int, optional): Maximum bit length of each token to hide. Defaults to 5.
+        max_new_tokens (int, optional): Maximum new tokens to be generated. Defaults to None.
+        complete_sent (bool, optional): Whether to complete the sentence. Defaults to False.
     """
     bs = BitStream(bits)
-    cur_ids = prompt_input_ids
+    cur_ids = prompt_ids
 
+    is_truncated = False
     while bs.pos < len(bs):
         egs_result = search.enhanced_greedy_search(
             model,
             cur_ids,
-            capacity=capacity,
             threshold=threshold,
-            max_bits_len=max_bits_len,
+            max_bits_len=max_bpw,
         )
         new_ids, used_bits = egs_result["comb_ids"], egs_result["trunc_bits"]
         used_bits: int = used_bits.item()
@@ -82,14 +91,20 @@ def hide_bits_with_prompt_ids_by_egs(
             cur_ids = new_ids
             continue
 
-        # TODO: abort if too long
         actual_bits = min(used_bits, len(bs) - bs.pos)
         tmp_bs: ConstBitStream = bs.read(f"bits:{actual_bits}")
         tmp_bs = ConstBitStream(reversed(tmp_bs))
         cur_idx: int = tmp_bs.read(f"uint:{actual_bits}")
         cur_ids = new_ids[cur_idx].unsqueeze(0)
+        if max_new_tokens is not None and cur_ids.size(1) - prompt_ids.size(1) >= max_new_tokens:
+            # abort if too long
+            is_truncated = True
+            break
 
-    return search.enhanced_greedy_search_end(model, cur_ids)
+    if complete_sent:
+        return search.enhanced_greedy_search_end(model, cur_ids), is_truncated
+    else:
+        return cur_ids, is_truncated
 
 
 #########################################################################
@@ -111,6 +126,10 @@ def extract_bits_with_prompt_ids(
     method: str,
     **kwargs,
 ) -> BitStream:
+    warnings.warn(
+        "This function is deprecated. Use extract_bits_with_prompt_ids_by_egs instead.",
+        DeprecationWarning,
+    )
     assert method in ["egs"]
     assert prompt_input_ids.dim() == 2, "prompt_input_ids must be (1, seq_len)."
     assert prompt_input_ids.size(0) == 1, "Only support batch size 1."
@@ -126,9 +145,8 @@ def extract_bits_with_prompt_ids_by_egs(
     model,
     prompt_input_ids: torch.Tensor,
     hide_ids: torch.Tensor,
-    capacity: float = 0.6,
     threshold: float = 5e-3,
-    max_bits_len: int = 5,
+    max_bpw: int = 5,
     **kwargs,
 ) -> BitStream:
     assert prompt_input_ids.dim() == 2, "prompt_input_ids must be (1, seq_len)."
@@ -140,9 +158,8 @@ def extract_bits_with_prompt_ids_by_egs(
         egs_result = search.enhanced_greedy_search(
             model,
             cur_ids,
-            capacity=capacity,
             threshold=threshold,
-            max_bits_len=max_bits_len,
+            max_bits_len=max_bpw,
         )
         new_ids, used_bits = egs_result["comb_ids"], egs_result["trunc_bits"]
         used_bits: int = used_bits.item()
@@ -154,8 +171,10 @@ def extract_bits_with_prompt_ids_by_egs(
         if new_ids.size(1) > hide_ids.size(1):
             break
 
-        for idx, new_id in enumerate(new_ids):
-            if (new_id == hide_ids[0, : new_id.size(0)]).all().item():
+        hide_ids_last_token: int = hide_ids[0, new_ids.size(1) - 1].item()
+        for idx, new_id in enumerate(new_ids.cpu()):
+            new_ids_last_token: int = new_id[-1].item()
+            if new_ids_last_token == hide_ids_last_token:
                 # found the target
                 tmp_bs = ConstBitStream(uint=idx, length=used_bits)
                 tmp_bs = ConstBitStream(reversed(tmp_bs))

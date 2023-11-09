@@ -86,11 +86,11 @@ def beam_search_end(
     model: tr.LlamaForCausalLM
 
     generation_config = tr.GenerationConfig.from_model_config(model.config)
-    generation_config.length_penalty = -1.0
-    generation_config.num_beams = 1
+    # generation_config.length_penalty = -1.0
+    # generation_config.num_beams = 1
     generation_config.num_return_sequences = 1
     generation_config.eos_token_id = eos_ids
-    generation_config.early_stopping = True
+    # generation_config.early_stopping = True
     generation_config.max_new_tokens = 32
 
     ret_ids: torch.Tensor = model.generate(
@@ -102,10 +102,17 @@ def beam_search_end(
 
 @torch.no_grad()
 def enhanced_greedy_search(
-    model,
+    model: tr.LlamaForCausalLM,
     input_ids: torch.Tensor,
-    fallback_eos_id: int = 1126,  # token `And` in LLaMa
-    capacity: float = 0.6,
+    ignored_ids: list[int] = [
+        0,
+        1,
+        2,
+        12,  # token `\t`
+        13,  # token `\n`
+        6756,  # token `\r`
+    ],  # special tokens, `\r` and `\n` in LLaMA
+    # fallback_eos_id: int = 1126,  # token `And` in LLaMA
     threshold: float = 5e-3,
     max_bits_len: int = 5,
 ) -> dict[str, torch.Tensor]:
@@ -114,8 +121,8 @@ def enhanced_greedy_search(
         model: Probably a LLaMa model.
         input_ids: (batch_size, seq_len) tensor of token ids,
             DO NOT add special tokens to the end.
-        fallback_eos_id: The token id to prevent the model from being stopped.
-        capacity: The maximum capacity of the search.
+        # fallback_eos_id: The token id to prevent the model from being stopped.
+        ignored_ids: The token ids to be ignored.
         threshold: The minimum probability of the search.
         max_bits_len: The maximum length of the bits.
 
@@ -126,18 +133,16 @@ def enhanced_greedy_search(
     """
     assert input_ids.dim() == 2
     assert input_ids.size(0) == 1, "Only support batch size 1."
-    model: tr.LlamaForCausalLM
 
     logits: torch.Tensor = model(input_ids=input_ids).logits[0, -1]  # (vocab_size)
+    logits[ignored_ids] = -10
     probs = F.softmax(logits, dim=-1)  # (vocab_size)
 
     sorted_probs, sorted_probs_indice = probs.sort(dim=-1, descending=True, stable=True)
-    cum_sorted_probs = torch.cumsum(sorted_probs, dim=-1)
 
-    less_cap_cnt: torch.Tensor = (cum_sorted_probs <= capacity).sum(dtype=torch.long)
     less_thres_cnt: torch.Tensor = (sorted_probs >= threshold).sum(dtype=torch.long)
 
-    trunc_cnt = torch.minimum(less_cap_cnt, less_thres_cnt)
+    trunc_cnt = less_thres_cnt
     trunc_cnt = torch.maximum(trunc_cnt, torch.ones_like(trunc_cnt))
 
     trunc_bits = torch.floor(torch.log2(trunc_cnt.float())).long()
@@ -146,29 +151,27 @@ def enhanced_greedy_search(
 
     ret_ids = torch.cat(
         [
-            input_ids.repeat(trunc_cnt, -1),
+            input_ids.repeat(trunc_cnt, 1),
             sorted_probs_indice[:trunc_cnt, None],
         ],
         dim=-1,
     )
     # replace every occurence of `eos_id` with `fallback_eos_id`
-    generation_config = tr.GenerationConfig.from_model_config(model.config)
-    ret_ids[ret_ids == generation_config.eos_token_id] = fallback_eos_id
-    ret_ids[ret_ids == generation_config.pad_token_id] = fallback_eos_id
-    ret_ids[ret_ids == 2] = fallback_eos_id
+    # cond = ret_ids[:, -1] == model.config.eos_token_id
+    # ret_ids[:, -1][cond] = fallback_eos_id
 
     return {
         "comb_ids": ret_ids,
         "trunc_bits": trunc_bits,
-        "log_probs": torch.log(sorted_probs[:trunc_cnt].float()),
     }
 
 
 @torch.no_grad()
 def enhanced_greedy_search_end(
-    model,
+    model: tr.LlamaForCausalLM,
     input_ids: torch.Tensor,
     attention_mask: torch.Tensor | None = None,
-    eos_ids: int = [1, 29889, 29973, 29991],
+    extra_eos_ids: int = [29889, 29973, 29991],
 ) -> torch.Tensor:
+    eos_ids = [model.config.eos_token_id] + extra_eos_ids
     return beam_search_end(model, input_ids, attention_mask=attention_mask, eos_ids=eos_ids)

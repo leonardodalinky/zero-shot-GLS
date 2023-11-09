@@ -11,10 +11,10 @@ P.S.: If you set `tmp_saves/` correctly, you can skip this step.
 
 ## Stages
 
-* stage1 (s1): Plaintext to enc_bits.
-* stage2 (s2): Enc_bits to stegotext.
-* stage3 (s3): Stegotext to dec_bits.
-* stage4 (s4): Dec_bits to dec_plaintext.
+* stage1 (s1,  encode): Plaintext to enc_bits.
+* stage2 (s2, encrypt): Enc_bits to stegotext.
+* stage3 (s3, decrypt): Stegotext to dec_bits.
+* stage4 (s4,  decode): Dec_bits to dec_plaintext.
 
 ## Stego modes
 

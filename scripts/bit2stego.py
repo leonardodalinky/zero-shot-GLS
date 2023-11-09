@@ -28,7 +28,10 @@ from p_utils import seed_everything
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="Bitstring to stegotext based on cover text.")
+    parser = argparse.ArgumentParser(
+        description="Bitstring to stegotext based on cover text.",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+    )
     ###############
     #             #
     #    I / O    #
@@ -47,26 +50,26 @@ def parse_args():
         "--src-col",
         type=str,
         default="enc_bits",
-        help="Column name of source encoded bitstring. [Default: enc_bits]",
+        help="Column name of source encoded bitstring.",
     )
     parser.add_argument(
         "-d",
         "--dst-col",
         type=str,
         default="stegotext",
-        help="Column name of destination stegotext. [Default: stegotext]",
+        help="Column name of destination stegotext.",
     )
     parser.add_argument(
         "--cover-col",
         type=str,
         default="plaintext",
-        help="Column name of the cover text in `--cover`. [Default: plaintext]",
+        help="Column name of the cover text in `--cover`.",
     )
     parser.add_argument(
         "--seed-col",
         type=str,
         default="enc_seed",
-        help="Column name of the seed used to generate stegotext. [Default: enc_seed]",
+        help="Column name of the seed used to generate stegotext.",
     )
     parser.add_argument(
         "-o",
@@ -79,7 +82,7 @@ def parse_args():
         "-n",
         "--n-rows",
         type=int,
-        help="Number of rows to process. [Default: all]",
+        help="Number of rows to process. Defaults to all.",
     )
     parser.add_argument(
         "--skip",
@@ -92,18 +95,19 @@ def parse_args():
         action="store_true",
         help="Force overwrite output file.",
     )
+    parser.add_argument("--corpus", type=str, default="Unknown", help="Hint for corpus name.")
     ###########################
     #                         #
     #    Generation Config    #
     #                         #
     ###########################
     parser.add_argument("--mode", type=str, required=True, choices=["cover"])
-    parser.add_argument("--n-cover", type=int, default=10, help="Number of cover text")
+    parser.add_argument("--n-cover", type=int, default=3, help="Number of cover text.")
     parser.add_argument(
         "--max-token-length",
         type=int,
         default=128,
-        help="Max token length of generated stegotext. [Default: 128]",
+        help="Max token length of generated stegotext.",
     )
     parser.add_argument(
         "--seed-gen-seed",
@@ -111,8 +115,34 @@ def parse_args():
         default=2023,
         help="Seed to generate seeds.",
     )
-    # TODO: egs params
-    parser.add_argument("--TODO")
+    parser.add_argument(
+        "--complete-sent",
+        action="store_true",
+        help="Complete stegotext for better reading.",
+    )
+    ####################
+    #                  #
+    #    egs params    #
+    #                  #
+    ####################
+    parser.add_argument(
+        "--threshold",
+        type=float,
+        default=2e-3,
+        help="Threshold of EGS.",
+    )
+    parser.add_argument(
+        "--max-bpw",
+        type=int,
+        default=5,
+        help="Max bits for each token (word) to hide.",
+    )
+    parser.add_argument(
+        "--max-new-tokens",
+        type=int,
+        default=256,
+        help="Max new tokens to be generated in hiding process.",
+    )
     ####################
     #                  #
     #    validating    #
@@ -125,6 +155,7 @@ def parse_args():
     ), f"{args.output} already exists. Use --force to overwrite."
     # different mode check
     if args.mode == "cover":
+        assert args.cover is not None, "Cover text is required for 'cover' mode."
         assert osp.exists(args.cover), f"{args.cover} does not exist for 'cover' mode."
 
     return args
@@ -137,6 +168,11 @@ def encrypt(
     prompt: str,
     bs_base64: str,
     seed: int,
+    egs_threshold: float,
+    max_bpw: int,
+    max_new_tokens: int | None = None,
+    sentence_id: int | None = None,
+    complete_sent: bool = False,
 ) -> str:
     device = model.device
     # decode base64
@@ -145,9 +181,23 @@ def encrypt(
         prompt_ids: torch.Tensor = tokenizer(prompt, return_tensors="pt").input_ids.to(
             device
         )  # (1, seq_len)
-        # TODO
-        ...
-    ...
+        out_ids, is_truncated = hide_extract.hide_bits_with_prompt_ids_by_egs(
+            model,
+            prompt_ids,
+            bs,
+            threshold=egs_threshold,
+            max_bpw=max_bpw,
+            max_new_tokens=max_new_tokens,
+            complete_sent=complete_sent,
+        )  # (1, new_seq_len)
+        if is_truncated:
+            logging.warning(f"Truncate sentence #{sentence_id}.")
+        assert out_ids.dim() == 2
+        assert out_ids.size(0) == 1
+
+        prompt_len: int = prompt_ids.size(1)
+        stego_ids = out_ids[0, prompt_len:-1]  # (new_seq_len - prompt_len - 1,)
+        return tokenizer.decode(stego_ids.tolist())
 
 
 if __name__ == "__main__":
@@ -198,11 +248,12 @@ if __name__ == "__main__":
     os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
     torch.use_deterministic_algorithms(True, warn_only=True)
 
-    logging.info("Loading LLaMA2 tokenizer.")
-    tokenizer = LlamaTokenizer.from_pretrained("TheBloke/Llama-2-13B-chat-GPTQ")
-    logging.info("Loading LLaMA2 model.")
+    model_name = "TheBloke/Llama-2-7B-chat-GPTQ"
+    logging.info(f"Loading {model_name} tokenizer.")
+    tokenizer = LlamaTokenizer.from_pretrained(model_name, legacy=True)
+    logging.info(f"Loading {model_name} model.")
     model = LlamaForCausalLM.from_pretrained(
-        "TheBloke/Llama-2-13B-chat-GPTQ",
+        model_name,
         local_files_only=True,
         trust_remote_code=False,
         revision="gptq-4bit-32g-actorder_True",
@@ -227,13 +278,22 @@ if __name__ == "__main__":
             tqdm(input_data[start_idx:end_idx], desc="Bits-To-Stego", dynamic_ncols=True)
         ):
             seed = seeds[row_idx]
-            prompt = gen_prompt(n=args.n_cover, seed=row[args.seed_col])
+            prompt = gen_prompt(
+                n_ctx=args.n_cover,
+                seed=seed,
+                corpus=args.corpus,
+            )
             stegotext = encrypt(
                 model,
                 tokenizer,
                 prompt=prompt,
                 bs_base64=row[args.src_col],
                 seed=seed,
+                sentence_id=row.get("sentence_id"),
+                egs_threshold=args.threshold,
+                max_bpw=args.max_bpw,
+                max_new_tokens=args.max_new_tokens,
+                complete_sent=args.complete_sent,
             )
             row[args.dst_col] = stegotext
             row[args.seed_col] = seed

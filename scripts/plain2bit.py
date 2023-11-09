@@ -25,21 +25,24 @@ from p_utils import seed_everything
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="Plain-text to bitstring.")
+    parser = argparse.ArgumentParser(
+        description="Plain-text to bitstring.",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+    )
     parser.add_argument("input", type=str, help="Input .csv file.")
     parser.add_argument(
         "-s",
         "--src-col",
         type=str,
         default="plaintext",
-        help="Column name of source plain-text. [Default: plaintext]",
+        help="Column name of source plain-text.",
     )
     parser.add_argument(
         "-d",
         "--dst-col",
         type=str,
         default="enc_bits",
-        help="Column name of destination bitstring. [Default: enc_bits]",
+        help="Column name of destination bitstring.",
     )
     parser.add_argument(
         "-o",
@@ -52,7 +55,7 @@ def parse_args():
         "-n",
         "--n-rows",
         type=int,
-        help="Number of rows to process. [Default: all]",
+        help="Number of rows to process. Defaults to all.",
     )
     parser.add_argument(
         "--skip",
@@ -69,7 +72,7 @@ def parse_args():
         "--max-token-length",
         type=int,
         default=64,
-        help="Max token length. [Default: 64]",
+        help="Max token length.",
     )
     ##########################
     #                        #
@@ -80,13 +83,13 @@ def parse_args():
         "--size-bits",
         type=int,
         default=8,
-        help="Number of size bits. [Default: 8]",
+        help="Number of size bits.",
     )
     parser.add_argument(
         "--ef-rounds",
         type=int,
         default=4,
-        help="Number of EF rounds. [Default: 4]",
+        help="Number of EF rounds.",
     )
     ####################
     #                  #
