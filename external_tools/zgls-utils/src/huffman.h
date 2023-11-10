@@ -6,8 +6,8 @@
 #include <vector>
 
 /// @brief Huffman tree node. ONLY should be used by Huffman Tree.
-/// @tparam I
-/// @tparam F
+/// @tparam K Key type.
+/// @tparam F Frequency type.
 template <typename K, typename F> struct Node {
     K key;
     F freq;

@@ -24,4 +24,10 @@ pre-commit install
 # In our server only.
 mkdir -p /media/data1/share/zgls
 ln -s /media/data1/share/zgls tmp_saves
+ln -s /media/data1/share/zgls/datasets/imdb datasets/imdb
+ln -s /media/data1/share/zgls/datasets/twitter datasets/twitter
 ```
+
+## Datasets
+
+Check [Dataset](datasets/README.md) section for details.

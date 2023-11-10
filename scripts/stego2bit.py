@@ -10,7 +10,7 @@ Usage:
         --threshold $threshold \
         --max-bpw $max_bpw \
         --n-rows 5 \
-        $DATA_DIR/imdb_s2.csvtest_dec
+        $DATA_DIR/imdb_s2.csv
 """
 import argparse
 import csv

@@ -164,3 +164,8 @@ cython_debug/
 
 # tmp files
 tmp_*
+
+# all dirs in datasets
+datasets/*
+!datasets/*.md
+!datasets/*.ipynb

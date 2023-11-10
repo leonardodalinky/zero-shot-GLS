@@ -20,3 +20,11 @@ P.S.: If you set `tmp_saves/` correctly, you can skip this step.
 
 For now, we have 3 modes:
 * `--mode=cover`: mimic the cover text.
+* TODO
+* TODO
+
+## Corpus Hints
+
+For IMDB, we use hint `IMDB about movies`.
+
+For Twitter, we use hint `Twitter`.
