@@ -1,7 +1,16 @@
 """Bitstring to stego-text.
 
 Usage:
-    TODO
+    python bit2stego.py -o $DATA_DIR/imdb_s2_c${n_cover}_t${threshold}_b${max_bpw}.csv \
+        --force \
+        --mode cover \
+        --cover $DATA_DIR/imdb.csv \
+        --n-cover $n_cover \
+        --corpus "IMDB about movies" \
+        --threshold $threshold \
+        --max-bpw $max_bpw \
+        --n-rows 6000 \
+        $DATA_DIR/imdb_s1.csv
 """
 import argparse
 import csv
@@ -13,7 +22,6 @@ import sys
 from typing import Any
 
 import torch
-from bitstring import BitStream
 from tqdm import tqdm
 
 os.environ["HF_HOME"] = f"{osp.dirname(__file__)}/../tmp_saves/hg_cache"
@@ -256,7 +264,7 @@ if __name__ == "__main__":
         model_name,
         local_files_only=True,
         trust_remote_code=False,
-        revision="gptq-4bit-32g-actorder_True",
+        revision="main",
         device_map=0,
     )
     model.eval()
@@ -267,7 +275,7 @@ if __name__ == "__main__":
     #################
     if args.force and osp.exists(args.output):
         logging.warning(f"Overwriting output file.")
-    logging.info(f"Encoding plaintext to bitstring. Output file: {args.output}.")
+    logging.info(f"Encrypt bitstring to stegotext. Output file: {args.output}.")
     os.makedirs(osp.dirname(args.output), exist_ok=True)
     with open(args.output, "w") as fp, prompt_gen.gen_prompt_ctx(
         mode=args.mode, cover=args.cover, cover_col=args.cover_col

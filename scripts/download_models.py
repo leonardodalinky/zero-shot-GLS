@@ -26,6 +26,7 @@ if __name__ == "__main__":
         model_name,
         resume_download=True,
         trust_remote_code=False,
-        revision="gptq-4bit-32g-actorder_True",
+        # revision="gptq-4bit-32g-actorder_True",
+        revision="main",
         max_memory={"cpu": "64GiB"},
     )

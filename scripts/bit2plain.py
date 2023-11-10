@@ -186,7 +186,7 @@ if __name__ == "__main__":
     #################
     if args.force and osp.exists(args.output):
         logging.warning(f"Overwriting output file.")
-    logging.info(f"Decoding plaintext from bitstring. Output file: {args.output}.")
+    logging.info(f"Decode plaintext from bitstring. Output file: {args.output}.")
     os.makedirs(osp.dirname(args.output), exist_ok=True)
     with open(args.output, "w") as fp:
         writer = csv.DictWriter(fp, fieldnames=input_fieldnames + [args.dst_col])

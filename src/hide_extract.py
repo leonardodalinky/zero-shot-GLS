@@ -142,18 +142,19 @@ def extract_bits_with_prompt_ids(
 
 
 def extract_bits_with_prompt_ids_by_egs(
-    model,
-    prompt_input_ids: torch.Tensor,
+    model: LlamaForCausalLM,
+    prompt_ids: torch.Tensor,
     hide_ids: torch.Tensor,
     threshold: float = 5e-3,
     max_bpw: int = 5,
     **kwargs,
-) -> BitStream:
-    assert prompt_input_ids.dim() == 2, "prompt_input_ids must be (1, seq_len)."
-    assert prompt_input_ids.size(0) == 1, "Only support batch size 1."
+) -> tuple[BitStream, bool]:
+    assert prompt_ids.dim() == 2, "prompt_input_ids must be (1, seq_len)."
+    assert prompt_ids.size(0) == 1, "Only support batch size 1."
 
     ret_bits = BitStream()
-    cur_ids = prompt_input_ids
+    cur_ids = prompt_ids
+    is_succeed = True
     while True:
         egs_result = search.enhanced_greedy_search(
             model,
@@ -183,6 +184,7 @@ def extract_bits_with_prompt_ids_by_egs(
                 break
         else:
             # cannot find the target
+            is_succeed = False
             break
 
-    return ret_bits
+    return ret_bits, is_succeed
