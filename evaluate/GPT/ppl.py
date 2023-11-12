@@ -1,4 +1,4 @@
-"""Compute metrics based on trained GPT-2 model."""
+"""Compute PPL based on trained GPT-2 model."""
 import argparse
 import csv
 import json
@@ -22,7 +22,7 @@ from p_utils import seed_everything
 
 def parse_args():
     parser = argparse.ArgumentParser(
-        "Compute metrics based on trained GPT-2 model.",
+        "Compute PPL based on trained GPT-2 model.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     ###############
@@ -78,9 +78,18 @@ def parse_args():
     assert args.force or not osp.exists(
         args.output
     ), f"{args.output} already exists. Use --force to overwrite."
-    assert osp.exists(args.model_dir), f"Model directory {args.model_dir} does not exist."
 
     return args
+
+
+def _perplexity(input_ids: torch.Tensor, probs: torch.Tensor) -> torch.Tensor:
+    # input_ids: (batch_size, seq_len)
+    # probs: (batch_size, seq_len, vocab_size)
+    # return: (batch_size,)
+    assert input_ids.shape[:2] == probs.shape[:2]
+    tmp = torch.gather(probs, dim=-1, index=input_ids.unsqueeze(-1))  # (B, L, 1)
+    tmp = tmp.squeeze(-1)  # (B, L)
+    return 2 ** (-torch.log2(tmp).mean(dim=-1))
 
 
 def perplexity(model: GPT2LMHeadModel, tokenizer: GPT2Tokenizer, text: str) -> float | None:
@@ -96,17 +105,9 @@ def perplexity(model: GPT2LMHeadModel, tokenizer: GPT2Tokenizer, text: str) -> f
     inputs_gpu = inputs.to(device)  # (1, seq_len)
     logits_gpu: torch.Tensor = model(inputs_gpu).logits
     probs_gpu = torch.softmax(logits_gpu, dim=-1)  # (1, seq_len, vocab_size)
-    probs = probs_gpu.cpu()
-    sum = 0.0
-    if inputs.size(1) <= 1:
-        return None
 
-    for input_id, prob in zip(inputs[0, 1:], probs[0, :-1]):
-        # input_id: int
-        # prob: torch.Tensor of shape (vocab_size,)
-        sum += torch.log2(prob[input_id]).item()
-    sum_len = inputs.size(1) - 1
-    return 2 ** (-sum / sum_len)
+    ppl = _perplexity(inputs_gpu[:, 1:], probs_gpu[:, :-1])  # (1,)
+    return ppl.item()
 
 
 if __name__ == "__main__":
@@ -161,7 +162,8 @@ if __name__ == "__main__":
     logging.info(f"Compute metrics. Output file: {args.output}.")
     ppl_list: list[float] = []
     with torch.no_grad():
-        for row in tqdm(input_data[start_idx:end_idx], desc="Metrics", dynamic_ncols=True):
+        for row in tqdm(input_data[start_idx:end_idx], desc="PPL", dynamic_ncols=True):
+            # TODO: batchify
             ppl = perplexity(model, tokenizer, row[args.data_col])
             if ppl is not None:
                 ppl_list.append(ppl)
