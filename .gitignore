@@ -168,4 +168,4 @@ tmp_*
 # all dirs in datasets
 datasets/*
 !datasets/*.md
-!datasets/*.ipynb
+!datasets/*_gen.ipynb

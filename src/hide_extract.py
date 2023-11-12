@@ -61,7 +61,7 @@ def hide_bits_with_prompt_ids_by_egs(
     max_new_tokens: int = None,
     complete_sent: bool = False,
     **kwargs,
-) -> tuple[torch.Tensor, bool]:
+) -> tuple[torch.Tensor, bool, int]:
     """Implementation of enhanced greedy search.
 
     Args:
@@ -102,9 +102,9 @@ def hide_bits_with_prompt_ids_by_egs(
             break
 
     if complete_sent:
-        return search.enhanced_greedy_search_end(model, cur_ids), is_truncated
+        return search.enhanced_greedy_search_end(model, cur_ids), is_truncated, bs.pos
     else:
-        return cur_ids, is_truncated
+        return cur_ids, is_truncated, len(bs)
 
 
 #########################################################################

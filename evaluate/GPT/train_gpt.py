@@ -36,6 +36,12 @@ def parse_args():
         default="plaintext",
         help="Name of the column containing the data.",
     )
+    parser.add_argument(
+        "--save-dir",
+        type=str,
+        required=True,
+        help="Directory to save the trained model.",
+    )
     ######################
     #                    #
     #    Dataset Args    #
@@ -69,7 +75,7 @@ def parse_args():
 
 def gen_dataset(input_path: str, data_col: str, seed: int) -> DatasetDict:
     """Generate a dataset from the input file."""
-    datasets = load_dataset("csv", data_files=input_path, split="train")
+    datasets = load_dataset("csv", data_files=input_path)
     datasets = datasets.select_columns(data_col)
     datasets = datasets.rename_column(data_col, "text")
     datasets = datasets.train_test_split(test_size=0.1, shuffle=True, seed=seed)
@@ -102,7 +108,7 @@ if __name__ == "__main__":
     )
 
     train_args = TrainingArguments(
-        output_dir=f"{TMP_SAVES_DIR}/gpt2/{dataset_name}",
+        output_dir=args.save_dir,
         per_device_train_batch_size=16,
         per_device_eval_batch_size=16,
         evaluation_strategy="no",

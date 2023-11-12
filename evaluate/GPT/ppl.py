@@ -8,10 +8,11 @@ import os.path as osp
 import sys
 from typing import Any
 
+import numpy as np
 import torch
 from tqdm import tqdm
 
-os.environ["HF_HOME"] = f"{osp.dirname(__file__)}/../tmp_saves/hg_cache"
+os.environ["HF_HOME"] = f"{osp.dirname(__file__)}/../../tmp_saves/hg_cache"
 sys.path.append(f"{osp.dirname(osp.abspath(__file__))}/../../src")
 
 from transformers import GPT2LMHeadModel, GPT2Tokenizer
@@ -82,39 +83,30 @@ def parse_args():
     return args
 
 
-def perplexity(model: GPT2LMHeadModel, tokenizer: GPT2Tokenizer, text: str) -> float:
+def perplexity(model: GPT2LMHeadModel, tokenizer: GPT2Tokenizer, text: str) -> float | None:
     """Compute perplexity of a given text."""
     device = model.device
-    inputs: torch.Tensor = tokenizer(text, return_tensors="pt").input_ids
+    inputs: torch.Tensor = tokenizer(
+        text,
+        return_tensors="pt",
+        truncation=True,
+    ).input_ids
     assert inputs.dim() == 2
     assert inputs.size(0) == 1
-    assert inputs[0, 0] == tokenizer.bos_token_id
     inputs_gpu = inputs.to(device)  # (1, seq_len)
     logits_gpu: torch.Tensor = model(inputs_gpu).logits
     probs_gpu = torch.softmax(logits_gpu, dim=-1)  # (1, seq_len, vocab_size)
     probs = probs_gpu.cpu()
     sum = 0.0
+    if inputs.size(1) <= 1:
+        return None
+
     for input_id, prob in zip(inputs[0, 1:], probs[0, :-1]):
         # input_id: int
         # prob: torch.Tensor of shape (vocab_size,)
         sum += torch.log2(prob[input_id]).item()
     sum_len = inputs.size(1) - 1
     return 2 ** (-sum / sum_len)
-
-
-def jensen_shannon_divergence(model: GPT2LMHeadModel, tokenizer: GPT2Tokenizer, text: str) -> float:
-    """Compute Jensen-Shannon divergence of a given text."""
-    device = model.device
-    inputs: torch.Tensor = tokenizer(text, return_tensors="pt").input_ids
-    assert inputs.dim() == 2
-    assert inputs.size(0) == 1
-    assert inputs[0, 0] == tokenizer.bos_token_id
-    inputs_gpu = inputs.to(device)  # (1, seq_len)
-    logits_gpu: torch.Tensor = model(inputs_gpu).logits
-    probs_gpu = torch.softmax(logits_gpu, dim=-1)  # (1, seq_len, vocab_size)
-    probs = probs_gpu.cpu()
-    # TODO: compute true distribution
-    ...
 
 
 if __name__ == "__main__":
@@ -167,18 +159,22 @@ if __name__ == "__main__":
     if args.force and osp.exists(args.output):
         logging.warning(f"Overwriting output file.")
     logging.info(f"Compute metrics. Output file: {args.output}.")
-    all_metrics: dict[str, list[float]] = {
-        "ppl": [],
-        "jsd": [],
-    }
-    for row in tqdm(input_data[start_idx:end_idx], desc="Metrics", dynamic_ncols=True):
-        ppl = perplexity(model, tokenizer, row[args.data_col])
-        jsd = jensen_shannon_divergence(model, tokenizer, row[args.data_col])
-        all_metrics["ppl"].append(ppl)
-        all_metrics["jsd"].append(jsd)
+    ppl_list: list[float] = []
+    with torch.no_grad():
+        for row in tqdm(input_data[start_idx:end_idx], desc="Metrics", dynamic_ncols=True):
+            ppl = perplexity(model, tokenizer, row[args.data_col])
+            if ppl is not None:
+                ppl_list.append(ppl)
 
-    os.makedirs(osp.dirname(args.output), exist_ok=True)
+    ppl_mean = np.mean(ppl_list)
+    print("ppl_mean:", ppl_mean)
+    os.makedirs(osp.dirname(osp.abspath(args.output)), exist_ok=True)
     logging.info(f"Saving metrics to {args.output}.")
     with open(args.output, "w") as fp:
-        json.dump(all_metrics, fp)
+        json.dump(
+            {
+                "ppl_mean": ppl_mean,
+            },
+            fp,
+        )
     logging.info("Done.")

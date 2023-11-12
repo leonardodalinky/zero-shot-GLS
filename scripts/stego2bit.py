@@ -242,7 +242,7 @@ if __name__ == "__main__":
     if args.force and osp.exists(args.output):
         logging.warning(f"Overwriting output file.")
     logging.info(f"Decrypt bitstring from stegotext. Output file: {args.output}.")
-    os.makedirs(osp.dirname(args.output), exist_ok=True)
+    os.makedirs(osp.dirname(osp.abspath(args.output)), exist_ok=True)
     with open(args.output, "w") as fp, prompt_gen.gen_prompt_ctx(
         mode=args.mode, cover=args.cover, cover_col=args.cover_col
     ) as gen_prompt:

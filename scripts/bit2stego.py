@@ -189,7 +189,11 @@ def encrypt(
         prompt_ids: torch.Tensor = tokenizer(prompt, return_tensors="pt").input_ids.to(
             device
         )  # (1, seq_len)
-        out_ids, is_truncated = hide_extract.hide_bits_with_prompt_ids_by_egs(
+        (
+            out_ids,
+            is_truncated,
+            used_bit_len,
+        ) = hide_extract.hide_bits_with_prompt_ids_by_egs(
             model,
             prompt_ids,
             bs,
@@ -229,6 +233,9 @@ if __name__ == "__main__":
     assert (
         args.dst_col not in reader.fieldnames
     ), f"Dst column '{args.dst_col}' already in {args.input}."
+    assert (
+        args.seed_col not in reader.fieldnames
+    ), f"Seed column '{args.seed_col}' already in {args.input}."
     if args.skip is not None:
         assert args.skip > 0, f"--skip must be greater than 0."
         logging.info(f"Skipping first {args.skip} rows.")
@@ -276,11 +283,14 @@ if __name__ == "__main__":
     if args.force and osp.exists(args.output):
         logging.warning(f"Overwriting output file.")
     logging.info(f"Encrypt bitstring to stegotext. Output file: {args.output}.")
-    os.makedirs(osp.dirname(args.output), exist_ok=True)
+    os.makedirs(osp.dirname(osp.abspath(args.output)), exist_ok=True)
     with open(args.output, "w") as fp, prompt_gen.gen_prompt_ctx(
         mode=args.mode, cover=args.cover, cover_col=args.cover_col
     ) as gen_prompt:
-        writer = csv.DictWriter(fp, fieldnames=input_fieldnames + [args.dst_col, args.seed_col])
+        writer = csv.DictWriter(
+            fp,
+            fieldnames=input_fieldnames + [args.dst_col, args.seed_col, args.bpw_col],
+        )
         writer.writeheader()
         for row_idx, row in enumerate(
             tqdm(input_data[start_idx:end_idx], desc="Bits-To-Stego", dynamic_ncols=True)
