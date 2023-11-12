@@ -115,7 +115,7 @@ def encode(
     max_token_lengh: int,
     size_bits: int,
     ef_rounds: int,
-) -> str:
+) -> tuple[str, str]:
     """Encode plaintext to bitstring.
 
     Args:
@@ -125,6 +125,7 @@ def encode(
 
     Returns:
         str: Bitstring encoded in Base64 format.
+        str: Bitstring w/o EF coding, encoded in Base64 format.
     """
     device = model.device
     token_ids: torch.Tensor = tokenizer(
@@ -141,11 +142,18 @@ def encode(
         add_bos_token=True,
         max_bits_len=(2**size_bits - size_bits - 1),
     )
-    # pad to multiple of 8 bits
+    # w/ ef
     bs = codec.wrap_bits(bs, size_bits=size_bits, ef_rounds=ef_rounds)
     bs = BitStream(bs)
+    # pad to multiple of 8 bits
     bs.append("0b0" * (8 - len(bs) % 8))
-    return codec.bits2base64(bs)
+
+    # w/o ef
+    bs_wo = codec.wrap_bits(bs, size_bits=size_bits, ef_rounds=0)
+    bs_wo = BitStream(bs_wo)
+    # pad to multiple of 8 bits
+    bs_wo.append("0b0" * (8 - len(bs_wo) % 8))
+    return codec.bits2base64(bs), codec.bits2base64(bs_wo)
 
 
 if __name__ == "__main__":
@@ -202,11 +210,13 @@ if __name__ == "__main__":
         logging.warning(f"Overwriting output file.")
     logging.info(f"Encode plaintext to bitstring. Output file: {args.output}.")
     os.makedirs(osp.dirname(osp.abspath(args.output)), exist_ok=True)
+    # additional col for bs w/o EF coding
+    ex_dst_col = f"{args.dst_col}_wo_ef"
     with open(args.output, "w") as fp:
-        writer = csv.DictWriter(fp, fieldnames=input_fieldnames + [args.dst_col])
+        writer = csv.DictWriter(fp, fieldnames=input_fieldnames + [args.dst_col, ex_dst_col])
         writer.writeheader()
         for row in tqdm(input_data[start_idx:end_idx], desc="Plain-To-Bits", dynamic_ncols=True):
-            bits_base64 = encode(
+            bits_base64, bits_base64_wo = encode(
                 model,
                 tokenizer,
                 row[args.src_col],
@@ -215,5 +225,6 @@ if __name__ == "__main__":
                 ef_rounds=args.ef_rounds,
             )
             row[args.dst_col] = bits_base64
+            row[ex_dst_col] = bits_base64_wo
             writer.writerow(row)
     logging.info("Done.")
