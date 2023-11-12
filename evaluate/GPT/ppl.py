@@ -1,15 +1,15 @@
 """Compute PPL based on trained GPT-2 model."""
 import argparse
-import csv
 import json
 import logging
 import os
 import os.path as osp
 import sys
-from typing import Any
 
 import numpy as np
+import pandas as pd
 import torch
+from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 os.environ["HF_HOME"] = f"{osp.dirname(__file__)}/../../tmp_saves/hg_cache"
@@ -67,6 +67,18 @@ def parse_args():
         action="store_true",
         help="Force overwrite output file.",
     )
+    parser.add_argument(
+        "--max-token-length",
+        type=int,
+        default=128,
+        help="Maximum token length for training.",
+    )
+    parser.add_argument(
+        "--batch-size",
+        type=int,
+        default=16,
+        help="Batch size.",
+    )
 
     ####################
     #                  #
@@ -82,32 +94,39 @@ def parse_args():
     return args
 
 
-def _perplexity(input_ids: torch.Tensor, probs: torch.Tensor) -> torch.Tensor:
-    # input_ids: (batch_size, seq_len)
-    # probs: (batch_size, seq_len, vocab_size)
-    # return: (batch_size,)
-    assert input_ids.shape[:2] == probs.shape[:2]
-    tmp = torch.gather(probs, dim=-1, index=input_ids.unsqueeze(-1))  # (B, L, 1)
-    tmp = tmp.squeeze(-1)  # (B, L)
-    return 2 ** (-torch.log2(tmp).mean(dim=-1))
-
-
-def perplexity(model: GPT2LMHeadModel, tokenizer: GPT2Tokenizer, text: str) -> float | None:
+def perplexity(
+    model: GPT2LMHeadModel,
+    tokenizer: GPT2Tokenizer,
+    texts: list[str],
+    max_token_length: int,
+) -> list[float]:
     """Compute perplexity of a given text."""
     device = model.device
-    inputs: torch.Tensor = tokenizer(
-        text,
+    batch = tokenizer(
+        texts,
         return_tensors="pt",
         truncation=True,
-    ).input_ids
-    assert inputs.dim() == 2
-    assert inputs.size(0) == 1
-    inputs_gpu = inputs.to(device)  # (1, seq_len)
-    logits_gpu: torch.Tensor = model(inputs_gpu).logits
-    probs_gpu = torch.softmax(logits_gpu, dim=-1)  # (1, seq_len, vocab_size)
+        padding=True,
+        max_length=max_token_length,
+    ).to(device)
+    input_ids: torch.Tensor = batch.input_ids  # (B, L)
+    attn_mask: torch.Tensor = batch.attention_mask  # (B, L)
+    logits: torch.Tensor = model(**batch).logits  # (B, L, V)
+    probs = torch.softmax(logits, dim=-1)  # (B, L, V)
+    probs = probs.clamp_(min=1e-10)  # (B, L, V)
+    _input_ids = input_ids[:, 1:]  # (B, L-1)
+    _probs = probs[:, :-1]  # (B, L-1, V)
+    _attn_mask = attn_mask[:, 1:]  # (B, L-1)
+    assert _input_ids.shape[:2] == _probs.shape[:2]
 
-    ppl = _perplexity(inputs_gpu[:, 1:], probs_gpu[:, :-1])  # (1,)
-    return ppl.item()
+    # compute ppl
+    tmp = torch.gather(_probs, dim=-1, index=_input_ids.unsqueeze(-1))  # (B, L-1, 1)
+    tmp = tmp.squeeze(-1)  # (B, L-1)
+    log2_tmp = torch.log2(tmp)  # (B, L-1)
+    log2_tmp *= _attn_mask  # (B, L-1)
+
+    ret = 2 ** (-log2_tmp.sum(dim=-1) / _attn_mask.sum(dim=-1))  # (B,)
+    return ret.tolist()
 
 
 if __name__ == "__main__":
@@ -123,11 +142,9 @@ if __name__ == "__main__":
     #                 #
     ###################
     logging.info(f"Loading input data: {args.input}.")
-    with open(args.input, "r") as fp:
-        reader = csv.DictReader(fp)
-        input_fieldnames = list(reader.fieldnames)
-        input_data: list[dict[str, Any]] = list(reader)
-    assert args.data_col in reader.fieldnames, f"Data Column '{args.data_col}' not in {args.input}."
+    df = pd.read_csv(args.input)
+    assert args.data_col in df.columns, f"Data Column '{args.data_col}' not in {args.input}."
+    input_data: list[str] = df[args.data_col].to_list()
     if args.skip is not None:
         assert args.skip > 0, f"--skip must be greater than 0."
         logging.info(f"Skipping first {args.skip} rows.")
@@ -139,7 +156,14 @@ if __name__ == "__main__":
         end_idx = args.n_rows + start_idx
     else:
         end_idx = len(input_data)
+
     logging.info(f"Processing {end_idx - start_idx} rows.")
+    dataloader = DataLoader(
+        input_data[start_idx:end_idx],
+        batch_size=args.batch_size,
+        shuffle=False,
+        num_workers=4,
+    )
     #######################
     #                     #
     #    prepare model    #
@@ -162,11 +186,10 @@ if __name__ == "__main__":
     logging.info(f"Compute metrics. Output file: {args.output}.")
     ppl_list: list[float] = []
     with torch.no_grad():
-        for row in tqdm(input_data[start_idx:end_idx], desc="PPL", dynamic_ncols=True):
-            # TODO: batchify
-            ppl = perplexity(model, tokenizer, row[args.data_col])
-            if ppl is not None:
-                ppl_list.append(ppl)
+        for texts in tqdm(dataloader, desc="PPL", dynamic_ncols=True):
+            # texts: list[str]
+            ppls = perplexity(model, tokenizer, texts, args.max_token_length)
+            ppl_list.extend(ppls)
 
     ppl_mean = np.mean(ppl_list)
     print("ppl_mean:", ppl_mean)

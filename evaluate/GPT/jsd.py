@@ -74,6 +74,12 @@ def parse_args():
         default=128,
         help="Maximum token length for training.",
     )
+    parser.add_argument(
+        "--batch-size",
+        type=int,
+        default=16,
+        help="Batch size.",
+    )
 
     ####################
     #                  #
@@ -143,7 +149,12 @@ if __name__ == "__main__":
     ###################
     logging.info(f"Loading input data: {args.input}.")
     datasets = gen_dataset(args.input, args.data_col, args.seed)
-    test_dataloader = DataLoader(datasets["test"], batch_size=8, shuffle=False, num_workers=4)
+    test_dataloader = DataLoader(
+        datasets["test"],
+        batch_size=args.batch_size,
+        shuffle=False,
+        num_workers=4,
+    )
     #######################
     #                     #
     #    prepare model    #
@@ -173,8 +184,7 @@ if __name__ == "__main__":
     with torch.no_grad():
         for row in tqdm(test_dataloader, desc="JSD"):
             jsds = jensen(model1, model2, tokenizer, row["text"], args.max_token_length)
-            if jsds is not None:
-                jsd_list.extend(jsds)
+            jsd_list.extend(jsds)
 
     jsd_mean = np.mean(jsd_list)
     print("jsd_mean:", jsd_mean)
