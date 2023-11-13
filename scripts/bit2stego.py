@@ -289,7 +289,7 @@ if __name__ == "__main__":
     ) as gen_prompt:
         writer = csv.DictWriter(
             fp,
-            fieldnames=input_fieldnames + [args.dst_col, args.seed_col, args.bpw_col],
+            fieldnames=input_fieldnames + [args.dst_col, args.seed_col],
         )
         writer.writeheader()
         for row_idx, row in enumerate(

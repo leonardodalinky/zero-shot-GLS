@@ -176,6 +176,7 @@ if __name__ == "__main__":
     model.eval()
     logging.info(f"Loading GPT-2 tokenizer from {args.model_dir}.")
     tokenizer = GPT2Tokenizer.from_pretrained(args.model_dir)
+    tokenizer.pad_token = tokenizer.eos_token
     #################
     #               #
     #    metrics    #
