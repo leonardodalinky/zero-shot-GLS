@@ -7,42 +7,6 @@ import transformers as tr
 
 
 @torch.no_grad()
-def compute_nsp_probs(
-    model,
-    input_ids: torch.Tensor,
-    attention_mask: torch.Tensor | None = None,
-) -> torch.Tensor:
-    """
-    Predict the probability of next token.
-
-    Args:
-        model: Probably a LLaMa model.
-        input_ids: (batch_size, seq_len) tensor of token ids,
-            DO NOT add special tokens to the end.
-        attention_mask: (batch_size, seq_len) tensor of attention mask.
-            Only useful when the batch_size is greater than 2.
-
-    Returns:
-        (batch_size, vocab_size) tensor of probabilities.
-    """
-    assert isinstance(input_ids, torch.Tensor)
-    assert input_ids.dim() == 2
-    assert attention_mask is None or attention_mask.size() == input_ids.size()
-    model: tr.LlamaForCausalLM
-    logits: torch.Tensor = model(
-        input_ids=input_ids,
-        attention_mask=attention_mask,
-    ).logits  # (batch_size, seq_len, vocab_size)
-    probs = F.softmax(logits, dim=-1)  # (batch_size, seq_len, vocab_size)
-    if attention_mask is None:
-        return probs[:, -1, :]  # (batch_size, vocab_size)
-    else:
-        valid_len = attention_mask.sum(dim=-1, dtype=torch.long)  # (batch_size,)
-        assert (valid_len > 0).all()
-        return torch.index_select(probs, dim=1, index=valid_len - 1)  # (batch_size, vocab_size)
-
-
-@torch.no_grad()
 def beam_search(
     model,
     prompt_input_ids: torch.Tensor,
@@ -114,6 +78,7 @@ def enhanced_greedy_search(
     ],  # special tokens, `\r` and `\n` in LLaMA
     # fallback_eos_id: int = 1126,  # token `And` in LLaMA
     threshold: float = 5e-3,
+    temperature: float = 1.0,
     max_bits_len: int = 5,
 ) -> dict[str, torch.Tensor]:
     """
@@ -125,16 +90,13 @@ def enhanced_greedy_search(
         ignored_ids: The token ids to be ignored.
         threshold: The minimum probability of the search.
         max_bits_len: The maximum length of the bits.
-
-    Returns:
-        Tuple of:
-            (2 ** used_bits, seq_len) tensor of token ids.
-            The length of the used bits.
     """
     assert input_ids.dim() == 2
     assert input_ids.size(0) == 1, "Only support batch size 1."
 
     logits: torch.Tensor = model(input_ids=input_ids).logits[0, -1]  # (vocab_size)
+    logits = logits.double()
+    logits /= temperature
     logits[ignored_ids] = -10
     probs = F.softmax(logits, dim=-1)  # (vocab_size)
 
@@ -142,27 +104,27 @@ def enhanced_greedy_search(
 
     less_thres_cnt: torch.Tensor = (sorted_probs >= threshold).sum(dtype=torch.long)
 
-    trunc_cnt = less_thres_cnt
-    trunc_cnt = torch.maximum(trunc_cnt, torch.ones_like(trunc_cnt))
+    raw_trunc_cnt = less_thres_cnt
+    raw_trunc_cnt = torch.maximum(raw_trunc_cnt, torch.ones_like(raw_trunc_cnt))
+    raw_trunc_cnt = torch.minimum(
+        raw_trunc_cnt, (2 * torch.ones_like(raw_trunc_cnt)) ** max_bits_len
+    )
 
-    trunc_bits = torch.floor(torch.log2(trunc_cnt.float())).long()
-    trunc_bits = torch.minimum(trunc_bits, torch.ones_like(trunc_bits) * max_bits_len)
+    trunc_bits = torch.floor(torch.log2(raw_trunc_cnt.float())).long()
     trunc_cnt = 2**trunc_bits
 
     ret_ids = torch.cat(
         [
-            input_ids.repeat(trunc_cnt, 1),
-            sorted_probs_indice[:trunc_cnt, None],
+            input_ids.repeat(raw_trunc_cnt, 1),
+            sorted_probs_indice[:raw_trunc_cnt, None],
         ],
         dim=-1,
     )
-    # replace every occurence of `eos_id` with `fallback_eos_id`
-    # cond = ret_ids[:, -1] == model.config.eos_token_id
-    # ret_ids[:, -1][cond] = fallback_eos_id
 
     return {
-        "comb_ids": ret_ids,
-        "trunc_bits": trunc_bits,
+        "comb_ids": ret_ids,  # (raw_trunc_cnt, seq_len + 1)
+        "trunc_bits": trunc_bits,  # (,)
+        "sorted_probs": sorted_probs[:raw_trunc_cnt],  # (raw_trunc_cnt,)
     }
 
 

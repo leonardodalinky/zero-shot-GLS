@@ -68,6 +68,7 @@ def parse_args():
     #                    #
     ######################
     parser.add_argument("--seed", type=int, default=42, help="Random seed.")
+    parser.add_argument("--n-rows", type=int, default=10_000, help="Number of rows to load.")
     parser.add_argument(
         "--max-token-length",
         type=int,
@@ -148,9 +149,14 @@ if __name__ == "__main__":
     #                 #
     ###################
     logging.info(f"Loading input data: {args.input}.")
-    datasets = gen_dataset(args.input, args.data_col, args.seed)
+    dataset = gen_dataset(args.input, args.data_col)
+    sampled_indices = np.random.choice(
+        len(dataset),
+        size=args.n_rows,
+        replace=False,
+    )
     test_dataloader = DataLoader(
-        datasets["test"],
+        dataset.select(sampled_indices),
         batch_size=args.batch_size,
         shuffle=False,
         num_workers=4,

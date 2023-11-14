@@ -134,10 +134,23 @@ def parse_args():
     #                  #
     ####################
     parser.add_argument(
+        "--egs-mode",
+        type=str,
+        default="block",
+        choices=hide_extract.MODE,
+        help="Mode of EGS.",
+    )
+    parser.add_argument(
         "--threshold",
         type=float,
         default=2e-3,
         help="Threshold of EGS.",
+    )
+    parser.add_argument(
+        "--temperature",
+        type=float,
+        default=1.0,
+        help="Temperature of EGS.",
     )
     parser.add_argument(
         "--max-bpw",
@@ -177,7 +190,9 @@ def encrypt(
     bs_base64: str,
     seed: int,
     egs_threshold: float,
+    egs_temperature: float,
     max_bpw: int,
+    egs_mode: hide_extract.MODE_TYPE,
     max_new_tokens: int | None = None,
     sentence_id: int | None = None,
     complete_sent: bool = False,
@@ -192,12 +207,14 @@ def encrypt(
         (
             out_ids,
             is_truncated,
-            used_bit_len,
+            _used_bit_len,
         ) = hide_extract.hide_bits_with_prompt_ids_by_egs(
             model,
             prompt_ids,
             bs,
+            mode=egs_mode,
             threshold=egs_threshold,
+            temperature=egs_temperature,
             max_bpw=max_bpw,
             max_new_tokens=max_new_tokens,
             complete_sent=complete_sent,
@@ -218,6 +235,7 @@ if __name__ == "__main__":
         format="%(asctime)s [%(levelname)s] %(message)s",
     )
     args = parse_args()
+    logging.info(f"Args: {args}")
     seed_everything(42, deterministic=True, warn_only=True)
     ###################
     #                 #
@@ -308,7 +326,9 @@ if __name__ == "__main__":
                 bs_base64=row[args.src_col],
                 seed=seed,
                 sentence_id=row.get("sentence_id"),
+                egs_mode=args.egs_mode,
                 egs_threshold=args.threshold,
+                egs_temperature=args.temperature,
                 max_bpw=args.max_bpw,
                 max_new_tokens=args.max_new_tokens,
                 complete_sent=args.complete_sent,

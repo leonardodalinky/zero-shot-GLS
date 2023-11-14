@@ -1,6 +1,7 @@
 """Generating prompts for LLMs."""
 import contextlib
 import csv
+import logging
 import random
 from functools import partial
 from pathlib import Path
@@ -53,6 +54,7 @@ def gen_prompt_ctx(
         assert cover is not None, "Cover text is required for 'cover' mode."
         cover = Path(cover)
         assert cover.exists(), f"Cover text file '{cover}' does not exist."
+        logging.info(f"Loading cover text from '{cover}'.")
         with cover.open("r") as f:
             reader = csv.DictReader(f)
             assert cover_col in reader.fieldnames, f"Cover column '{cover_col}' not in {cover}."

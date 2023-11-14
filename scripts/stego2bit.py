@@ -117,10 +117,23 @@ def parse_args():
     #                  #
     ####################
     parser.add_argument(
+        "--egs-mode",
+        type=str,
+        default="block",
+        choices=hide_extract.MODE,
+        help="Mode of EGS.",
+    )
+    parser.add_argument(
         "--threshold",
         type=float,
         default=2e-3,
         help="Threshold of EGS.",
+    )
+    parser.add_argument(
+        "--temperature",
+        type=float,
+        default=1.0,
+        help="Temperature of EGS.",
     )
     parser.add_argument(
         "--max-bpw",
@@ -153,7 +166,9 @@ def decrypt(
     prompt: str,
     stegotext: str,
     seed: int,
+    egs_mode: hide_extract.MODE_TYPE,
     egs_threshold: float,
+    egs_temperature: float,
     max_bpw: int,
     sentence_id: int | None = None,
 ) -> str:
@@ -169,7 +184,9 @@ def decrypt(
             model,
             prompt_ids=prompt_ids,
             hide_ids=hide_ids,
+            mode=egs_mode,
             threshold=egs_threshold,
+            temperature=egs_temperature,
             max_bpw=max_bpw,
         )
         if not is_succeed:
@@ -262,7 +279,9 @@ if __name__ == "__main__":
                 stegotext=row[args.src_col],
                 seed=seed,
                 sentence_id=row.get("sentence_id"),
+                egs_mode=args.egs_mode,
                 egs_threshold=args.threshold,
+                egs_temperature=args.temperature,
                 max_bpw=args.max_bpw,
             )
             row[args.dst_col] = dec_bits
