@@ -12,6 +12,8 @@ import torch
 
 from prompt_template import COVER
 
+GEN_PROMPT_MODE_TYPE = Literal["cover", "sample"]
+
 
 @contextlib.contextmanager
 def random_state(seed: int):
@@ -39,7 +41,7 @@ def random_state(seed: int):
 
 @contextlib.contextmanager
 def gen_prompt_ctx(
-    mode: Literal["cover"],
+    mode: GEN_PROMPT_MODE_TYPE,
     cover: Path | str | None = None,
     cover_col: str = "plaintext",
 ):
@@ -50,7 +52,7 @@ def gen_prompt_ctx(
         cover (Path | str, optional): Cover text file. Defaults to None.
         cover_col (str, optional): Cover column name. Defaults to "plaintext".
     """
-    if mode == "cover":
+    if mode in ["cover", "sample"]:
         assert cover is not None, "Cover text is required for 'cover' mode."
         cover = Path(cover)
         assert cover.exists(), f"Cover text file '{cover}' does not exist."
@@ -59,7 +61,10 @@ def gen_prompt_ctx(
             reader = csv.DictReader(f)
             assert cover_col in reader.fieldnames, f"Cover column '{cover_col}' not in {cover}."
             cover_text: list[str] = [row[cover_col] for row in reader]
-        yield partial(cover_mode_prompt_gen, cover_text=cover_text)
+        if mode == "cover":
+            yield partial(cover_mode_prompt_gen, cover_text=cover_text)
+        elif mode == "sample":
+            yield partial(sample_mode_prompt_gen, cover_text=cover_text)
     else:
         raise NotImplementedError(f"Mode '{mode}' is not implemented.")
 
@@ -84,3 +89,15 @@ def cover_mode_prompt_gen(
         context = random.sample(cover_text, n_ctx)
         context = "\n\n".join(context)
         return COVER.substitute(corpus=corpus, context=context)
+
+
+def sample_mode_prompt_gen(seed: int, cover_text: list[str], **kwargs) -> str:
+    """Sample context text from cover text.
+
+    Args:
+        seed (int): Random seed.
+        cover_text (list[str]): Cover text.
+    """
+    with random_state(seed):
+        context = random.choice(cover_text)
+        return context

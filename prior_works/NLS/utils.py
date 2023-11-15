@@ -1,7 +1,7 @@
 import bitarray
 import numpy as np
 import torch
-from pytorch_transformers import GPT2LMHeadModel, GPT2Tokenizer
+from transformers import GPT2LMHeadModel, GPT2Tokenizer
 
 
 def decode(self, token_ids, **kwargs):
@@ -54,7 +54,7 @@ def int2bits(inp, num_bits):
     return [int(strval) for strval in reversed(strlist)]
 
 
-def is_sent_finish(token_idx, enc):
+def is_sent_finish(token_idx, enc: GPT2Tokenizer):
     token = enc.decoder[token_idx]
     return "." in token or "!" in token or "?" in token
 
@@ -68,7 +68,7 @@ def num_same_from_beg(bits1, bits2):
     return i
 
 
-def encode_context(raw_text, enc):
+def encode_context(raw_text: str, enc: GPT2Tokenizer) -> list[int]:
     context_tokens = [enc.encoder["<|endoftext|>"]] + enc.encode(raw_text)
     return context_tokens
 

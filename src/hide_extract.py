@@ -88,7 +88,7 @@ def hide_bits_with_prompt_ids_by_egs(
     cur_ids = prompt_ids
     temp_strategy = TemperatureAlphaStrategy(temperature, temperature_alpha)
     logits_strategy = LogitsRepeatPenaltyStrategy(
-        penalty=3.0,
+        penalty=4.0,
         delta=0.5,
         vocab_size=model.vocab_size,
         device=model.device,
@@ -223,7 +223,7 @@ def extract_bits_with_prompt_ids_by_egs(
     cur_ids = prompt_ids
     temp_strategy = TemperatureAlphaStrategy(temperature, temperature_alpha)
     logits_strategy = LogitsRepeatPenaltyStrategy(
-        penalty=3.0,
+        penalty=4.0,
         delta=0.5,
         vocab_size=model.vocab_size,
         device=model.device,

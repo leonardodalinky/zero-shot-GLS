@@ -1,10 +1,19 @@
 import torch
 import torch.nn.functional as F
 from huffman import HuffmanCoding
+from transformers import GPT2LMHeadModel, GPT2Tokenizer
 from utils import entropy, is_sent_finish, kl, limit_past
 
 
-def encode_huffman(model, enc, message, context, bits_per_word, finish_sent=False, device="cuda"):
+def encode_huffman(
+    model: GPT2LMHeadModel,
+    enc: GPT2Tokenizer,
+    message: list[int],
+    context: torch.Tensor,
+    bits_per_word: int,
+    finish_sent: bool = False,
+    device="cuda",
+):
     length = len(message)
 
     context = torch.tensor(context[-1022:], device=device, dtype=torch.long)
