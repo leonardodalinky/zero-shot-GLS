@@ -112,12 +112,6 @@ def parse_args():
     parser.add_argument("--mode", type=str, required=True, choices=["cover"])
     parser.add_argument("--n-cover", type=int, default=3, help="Number of cover text.")
     parser.add_argument(
-        "--max-token-length",
-        type=int,
-        default=128,
-        help="Max token length of generated stegotext.",
-    )
-    parser.add_argument(
         "--seed-gen-seed",
         type=int,
         default=2023,
@@ -153,6 +147,12 @@ def parse_args():
         help="Temperature of EGS.",
     )
     parser.add_argument(
+        "--temperature-alpha",
+        type=float,
+        default=1.25,
+        help="Temperature alpha of EGS.",
+    )
+    parser.add_argument(
         "--max-bpw",
         type=int,
         default=5,
@@ -161,7 +161,7 @@ def parse_args():
     parser.add_argument(
         "--max-new-tokens",
         type=int,
-        default=256,
+        default=160,
         help="Max new tokens to be generated in hiding process.",
     )
     ####################
@@ -191,6 +191,7 @@ def encrypt(
     seed: int,
     egs_threshold: float,
     egs_temperature: float,
+    egs_temperature_alpha: float,
     max_bpw: int,
     egs_mode: hide_extract.MODE_TYPE,
     max_new_tokens: int | None = None,
@@ -215,6 +216,7 @@ def encrypt(
             mode=egs_mode,
             threshold=egs_threshold,
             temperature=egs_temperature,
+            temperature_alpha=egs_temperature_alpha,
             max_bpw=max_bpw,
             max_new_tokens=max_new_tokens,
             complete_sent=complete_sent,
@@ -329,6 +331,7 @@ if __name__ == "__main__":
                 egs_mode=args.egs_mode,
                 egs_threshold=args.threshold,
                 egs_temperature=args.temperature,
+                egs_temperature_alpha=args.temperature_alpha,
                 max_bpw=args.max_bpw,
                 max_new_tokens=args.max_new_tokens,
                 complete_sent=args.complete_sent,

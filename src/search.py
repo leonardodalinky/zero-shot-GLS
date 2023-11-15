@@ -1,9 +1,27 @@
 """
 Fundamental search algorithms for LLMs.
 """
+import json
+import os.path as osp
+
 import torch
 import torch.nn.functional as F
 import transformers as tr
+
+# Token IDs to ignore during geneartion.
+DEFAULT_IGNORED_IDS = set(
+    [
+        0,
+        1,
+        2,
+        12,  # token `\t`
+        13,  # token `\n`
+        6756,  # token `\r`
+    ]
+)
+with open(f"{osp.dirname(__file__)}/ignore_ids.json", "r") as fp:
+    DEFAULT_IGNORED_IDS = DEFAULT_IGNORED_IDS.union(set(json.load(fp)))
+DEFAULT_IGNORED_IDS = list(DEFAULT_IGNORED_IDS)
 
 
 @torch.no_grad()
@@ -68,18 +86,12 @@ def beam_search_end(
 def enhanced_greedy_search(
     model: tr.LlamaForCausalLM,
     input_ids: torch.Tensor,
-    ignored_ids: list[int] = [
-        0,
-        1,
-        2,
-        12,  # token `\t`
-        13,  # token `\n`
-        6756,  # token `\r`
-    ],  # special tokens, `\r` and `\n` in LLaMA
+    ignored_ids: list[int] = DEFAULT_IGNORED_IDS,
     # fallback_eos_id: int = 1126,  # token `And` in LLaMA
     threshold: float = 5e-3,
     temperature: float = 1.0,
     max_bits_len: int = 5,
+    logits_offset: torch.Tensor | None = None,  # (vocab_size,)
 ) -> dict[str, torch.Tensor]:
     """
     Args:
@@ -97,6 +109,7 @@ def enhanced_greedy_search(
     logits: torch.Tensor = model(input_ids=input_ids).logits[0, -1]  # (vocab_size)
     logits = logits.double()
     logits /= temperature
+    logits += logits_offset
     logits[ignored_ids] = -10
     probs = F.softmax(logits, dim=-1)  # (vocab_size)
 

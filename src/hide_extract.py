@@ -10,6 +10,7 @@ from transformers import LlamaForCausalLM
 
 import codec
 import search
+from strategy import LogitsRepeatPenaltyStrategy, TemperatureAlphaStrategy
 
 MODE_TYPE = Literal["block", "huffman"]
 MODE = get_args(MODE_TYPE)
@@ -64,6 +65,7 @@ def hide_bits_with_prompt_ids_by_egs(
     mode: MODE_TYPE = "block",
     threshold: float = 5e-3,
     temperature: float = 1.0,
+    temperature_alpha: float = 1.25,
     max_bpw: int = 5,
     max_new_tokens: int = None,
     complete_sent: bool = False,
@@ -73,25 +75,39 @@ def hide_bits_with_prompt_ids_by_egs(
 
     Args:
         model (PreTrainedModel): Model.
-        prompt_ids (torch.Tensor): Prompt token ids.
+        prompt_ids (torch.Tensor): Prompt token ids. Shape of (1, seq_len).
         bits (ConstBitStream): Bitstream.
         threshold (float, optional): Threshold of the prompt. Defaults to 5e-3.
         temperature (float, optional): Temperature of the prompt. Defaults to 1.0.
+        temperature_alpha (float, optional): Temperature alpha for trivial outputs. Defaults to 1.25.
         max_bpw (int, optional): Maximum bit length of each token to hide. Defaults to 5.
         max_new_tokens (int, optional): Maximum new tokens to be generated. Defaults to None.
         complete_sent (bool, optional): Whether to complete the sentence. Defaults to False.
     """
     bs = BitStream(bits)
     cur_ids = prompt_ids
+    temp_strategy = TemperatureAlphaStrategy(temperature, temperature_alpha)
+    logits_strategy = LogitsRepeatPenaltyStrategy(
+        penalty=3.0,
+        delta=0.5,
+        vocab_size=model.vocab_size,
+        device=model.device,
+    )
 
     is_truncated = False
     while bs.pos < len(bs):
+        if max_new_tokens is not None and cur_ids.size(1) - prompt_ids.size(1) >= max_new_tokens:
+            # abort if too long
+            is_truncated = True
+            break
+
         egs_result = search.enhanced_greedy_search(
             model,
             cur_ids,
             threshold=threshold,
-            temperature=temperature,
+            temperature=temp_strategy.temperature,
             max_bits_len=max_bpw,
+            logits_offset=logits_strategy.logits_offset,
         )
         new_ids, trunc_bits, sorted_probs = (
             egs_result["comb_ids"],
@@ -102,6 +118,8 @@ def hide_bits_with_prompt_ids_by_egs(
         trunc_bits: int = trunc_bits.item()
         if new_ids.size(0) == 1:
             cur_ids = new_ids
+            temp_strategy.update(new_ids.size(0))
+            logits_strategy.update(cur_ids[0, -1].item())
             continue
 
         if mode == "block":
@@ -111,6 +129,8 @@ def hide_bits_with_prompt_ids_by_egs(
             tmp_bs = ConstBitStream(reversed(tmp_bs))
             cur_idx: int = tmp_bs.read(f"uint:{actual_bits}")
             cur_ids = new_ids[cur_idx].unsqueeze(0)
+            temp_strategy.update()
+            logits_strategy.update(cur_ids[0, -1].item())
         elif mode == "huffman":
             # encode using another huffman coding
             sorted_probs_list: list[float] = sorted_probs.tolist()
@@ -124,6 +144,8 @@ def hide_bits_with_prompt_ids_by_egs(
                 if (tgt_idx := code2idx.get(tmp_bits)) is not None:
                     # find the target
                     cur_ids = new_ids[tgt_idx].unsqueeze(0)
+                    temp_strategy.update()
+                    logits_strategy.update(cur_ids[0, -1].item())
                     break
             else:
                 # did not find
@@ -134,17 +156,14 @@ def hide_bits_with_prompt_ids_by_egs(
                     if (tgt_idx := code2idx.get(tmp_bits)) is not None:
                         # find the target
                         cur_ids = new_ids[tgt_idx].unsqueeze(0)
+                        temp_strategy.update()
+                        logits_strategy.update(cur_ids[0, -1].item())
                         break
                 else:
                     # Impossible
                     assert False, "Impossible!"
         else:
             raise NotImplementedError(f"Unknown mode: {mode}")
-
-        if max_new_tokens is not None and cur_ids.size(1) - prompt_ids.size(1) >= max_new_tokens:
-            # abort if too long
-            is_truncated = True
-            break
 
     if complete_sent:
         return search.enhanced_greedy_search_end(model, cur_ids), is_truncated, bs.pos
@@ -193,6 +212,7 @@ def extract_bits_with_prompt_ids_by_egs(
     mode: MODE_TYPE = "block",
     threshold: float = 5e-3,
     temperature: float = 1.0,
+    temperature_alpha: float = 1.25,
     max_bpw: int = 5,
     **kwargs,
 ) -> tuple[BitStream, bool]:
@@ -201,14 +221,22 @@ def extract_bits_with_prompt_ids_by_egs(
 
     ret_bits = BitStream()
     cur_ids = prompt_ids
+    temp_strategy = TemperatureAlphaStrategy(temperature, temperature_alpha)
+    logits_strategy = LogitsRepeatPenaltyStrategy(
+        penalty=3.0,
+        delta=0.5,
+        vocab_size=model.vocab_size,
+        device=model.device,
+    )
     is_succeed = True
     while True:
         egs_result = search.enhanced_greedy_search(
             model,
             cur_ids,
             threshold=threshold,
-            temperature=temperature,
+            temperature=temp_strategy.temperature,
             max_bits_len=max_bpw,
+            logits_offset=logits_strategy.logits_offset,
         )
         new_ids, trunc_bits, sorted_probs = (
             egs_result["comb_ids"],
@@ -219,6 +247,8 @@ def extract_bits_with_prompt_ids_by_egs(
         trunc_bits: int = trunc_bits.item()
         if new_ids.size(0) == 1:
             cur_ids = new_ids
+            temp_strategy.update(new_ids.size(0))
+            logits_strategy.update(cur_ids[0, -1].item())
             continue
 
         if new_ids.size(1) > hide_ids.size(1):
@@ -235,6 +265,8 @@ def extract_bits_with_prompt_ids_by_egs(
                     tmp_bs = ConstBitStream(reversed(tmp_bs))
                     ret_bits += tmp_bs
                     cur_ids = new_ids[idx].unsqueeze(0)
+                    temp_strategy.update()
+                    logits_strategy.update(cur_ids[0, -1].item())
                     break
             else:
                 # cannot find the target
@@ -253,6 +285,8 @@ def extract_bits_with_prompt_ids_by_egs(
                     tmp_bs = ConstBitStream(bin=code)
                     ret_bits += tmp_bs
                     cur_ids = new_ids[idx].unsqueeze(0)
+                    temp_strategy.update()
+                    logits_strategy.update(cur_ids[0, -1].item())
                     break
             else:
                 # cannot find the target

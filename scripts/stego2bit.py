@@ -136,6 +136,12 @@ def parse_args():
         help="Temperature of EGS.",
     )
     parser.add_argument(
+        "--temperature-alpha",
+        type=float,
+        default=1.0,
+        help="Temperature alpha of EGS.",
+    )
+    parser.add_argument(
         "--max-bpw",
         type=int,
         default=5,
@@ -169,6 +175,7 @@ def decrypt(
     egs_mode: hide_extract.MODE_TYPE,
     egs_threshold: float,
     egs_temperature: float,
+    egs_temperature_alpha: float,
     max_bpw: int,
     sentence_id: int | None = None,
 ) -> str:
@@ -187,6 +194,7 @@ def decrypt(
             mode=egs_mode,
             threshold=egs_threshold,
             temperature=egs_temperature,
+            temperature_alpha=egs_temperature_alpha,
             max_bpw=max_bpw,
         )
         if not is_succeed:
@@ -282,6 +290,7 @@ if __name__ == "__main__":
                 egs_mode=args.egs_mode,
                 egs_threshold=args.threshold,
                 egs_temperature=args.temperature,
+                egs_temperature_alpha=args.temperature_alpha,
                 max_bpw=args.max_bpw,
             )
             row[args.dst_col] = dec_bits
