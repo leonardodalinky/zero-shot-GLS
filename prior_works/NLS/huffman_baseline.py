@@ -24,7 +24,7 @@ def encode_huffman(
 
     total_num = 0
     total_num_for_stats = 0
-    total_log_probs = 0
+    total_log2_probs = 0
     total_kl = 0  # in bits
     total_num_sents = 0
 
@@ -32,8 +32,10 @@ def encode_huffman(
         i = 0
         sent_finish = False
         while i < length or (finish_sent and not sent_finish):
-            logits, past = model(prev.unsqueeze(0), past=past)
-            past = limit_past(past)
+            # NOTE: old code
+            # logits, past = model(prev.unsqueeze(0), past=past)
+            # past = limit_past(past)
+            logits = model(output.unsqueeze(0)).logits
             logits[0, -1, -1] = -1e10  # endoftext can't happen
             logits[0, -1, 628] = -1e10  # 2 newlines can't happen
             logits, indices = logits[0, -1, :].sort(descending=True)
@@ -42,6 +44,7 @@ def encode_huffman(
             indices = indices[: 2**bits_per_word]
             log_probs = F.log_softmax(logits, dim=-1)[: 2**bits_per_word]
             probs = torch.exp(log_probs)
+            log2_probs = torch.log2(logits)[: 2**bits_per_word]
 
             if i >= length:
                 selection = 0
@@ -70,7 +73,7 @@ def encode_huffman(
                 logq = logq * 0.69315  # in nats
                 q = torch.exp(logq)
                 total_kl += kl(q, logq, log_probs)
-                total_log_probs += log_probs[selection].item()
+                total_log2_probs += log2_probs[selection].item()
                 total_num_for_stats += 1
 
             total_num += 1
@@ -78,7 +81,7 @@ def encode_huffman(
             prev = indices[selection].view(1)
             output = torch.cat((output, prev))
 
-    avg_NLL = -total_log_probs / total_num_for_stats
+    avg_NLL = -total_log2_probs / total_num_for_stats
     avg_KL = total_kl / total_num_for_stats
     words_per_bit = total_num_for_stats / i
 

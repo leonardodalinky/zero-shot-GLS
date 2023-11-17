@@ -124,7 +124,6 @@ def enhanced_greedy_search(
     )
 
     trunc_bits = torch.floor(torch.log2(raw_trunc_cnt.float())).long()
-    trunc_cnt = 2**trunc_bits
 
     ret_ids = torch.cat(
         [

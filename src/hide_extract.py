@@ -70,7 +70,7 @@ def hide_bits_with_prompt_ids_by_egs(
     max_new_tokens: int = None,
     complete_sent: bool = False,
     **kwargs,
-) -> tuple[torch.Tensor, bool, int]:
+) -> tuple[torch.Tensor, bool, int, float]:
     """Implementation of enhanced greedy search.
 
     Args:
@@ -93,6 +93,8 @@ def hide_bits_with_prompt_ids_by_egs(
         vocab_size=model.vocab_size,
         device=model.device,
     )
+
+    nll_list: list[float] = []
 
     is_truncated = False
     while bs.pos < len(bs):
@@ -129,6 +131,10 @@ def hide_bits_with_prompt_ids_by_egs(
             tmp_bs = ConstBitStream(reversed(tmp_bs))
             cur_idx: int = tmp_bs.read(f"uint:{actual_bits}")
             cur_ids = new_ids[cur_idx].unsqueeze(0)
+
+            nll = -torch.log2(sorted_probs[cur_idx])
+            nll_list.append(nll.item())
+
             temp_strategy.update()
             logits_strategy.update(cur_ids[0, -1].item())
         elif mode == "huffman":
@@ -144,6 +150,10 @@ def hide_bits_with_prompt_ids_by_egs(
                 if (tgt_idx := code2idx.get(tmp_bits)) is not None:
                     # find the target
                     cur_ids = new_ids[tgt_idx].unsqueeze(0)
+
+                    nll = -torch.log2(sorted_probs[cur_idx])
+                    nll_list.append(nll.item())
+
                     temp_strategy.update()
                     logits_strategy.update(cur_ids[0, -1].item())
                     break
@@ -156,6 +166,10 @@ def hide_bits_with_prompt_ids_by_egs(
                     if (tgt_idx := code2idx.get(tmp_bits)) is not None:
                         # find the target
                         cur_ids = new_ids[tgt_idx].unsqueeze(0)
+
+                        nll = -torch.log2(sorted_probs[cur_idx])
+                        nll_list.append(nll.item())
+
                         temp_strategy.update()
                         logits_strategy.update(cur_ids[0, -1].item())
                         break
@@ -165,10 +179,12 @@ def hide_bits_with_prompt_ids_by_egs(
         else:
             raise NotImplementedError(f"Unknown mode: {mode}")
 
+    ppl = 2 ** (sum(nll_list) / len(nll_list))
+
     if complete_sent:
-        return search.enhanced_greedy_search_end(model, cur_ids), is_truncated, bs.pos
+        return search.enhanced_greedy_search_end(model, cur_ids), is_truncated, bs.pos, ppl
     else:
-        return cur_ids, is_truncated, len(bs)
+        return cur_ids, is_truncated, len(bs), ppl
 
 
 #########################################################################

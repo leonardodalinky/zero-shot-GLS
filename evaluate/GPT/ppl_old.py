@@ -1,4 +1,8 @@
-"""Compute JSD based on trained GPT-2 model."""
+"""
+**Deprecated**: This script is deprecated. PPL should not be computed here.
+
+Compute PPL based on trained GPT-2 model.
+"""
 import argparse
 import json
 import logging
@@ -7,10 +11,10 @@ import os.path as osp
 import sys
 
 import numpy as np
+import pandas as pd
 import torch
 from torch.utils.data import DataLoader
 from tqdm import tqdm
-from train_gpt import gen_dataset
 
 os.environ["HF_HOME"] = f"{osp.dirname(__file__)}/../../tmp_saves/hg_cache"
 sys.path.append(f"{osp.dirname(osp.abspath(__file__))}/../../src")
@@ -22,7 +26,7 @@ from p_utils import seed_everything
 
 def parse_args():
     parser = argparse.ArgumentParser(
-        "Compute JSD based on trained GPT-2 model.",
+        "Compute PPL based on trained GPT-2 model.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     ###############
@@ -30,11 +34,11 @@ def parse_args():
     #    I / O    #
     #             #
     ###############
-    parser.add_argument("input", type=str, help="Path to the input .csv dataset file.")
+    parser.add_argument("input", type=str, help="Path to the input .csv data file.")
     parser.add_argument(
         "--data-col",
         type=str,
-        default="plaintext",
+        required=True,
         help="Name of the column containing the textual data.",
     )
     parser.add_argument(
@@ -45,16 +49,21 @@ def parse_args():
         help="Output .json file.",
     )
     parser.add_argument(
-        "--model-dir1",
+        "--model-dir",
         type=str,
         required=True,
-        help="Path to the directory containing the trained model 1.",
+        help="Path to the directory containing the trained model.",
     )
     parser.add_argument(
-        "--model-dir2",
-        type=str,
-        required=True,
-        help="Path to the directory containing the trained model 2.",
+        "-n",
+        "--n-rows",
+        type=int,
+        help="Number of rows to process. Defaults to all rows.",
+    )
+    parser.add_argument(
+        "--skip",
+        type=int,
+        help="Skip first N rows.",
     )
     parser.add_argument(
         "-f",
@@ -62,13 +71,6 @@ def parse_args():
         action="store_true",
         help="Force overwrite output file.",
     )
-    ######################
-    #                    #
-    #    Dataset Args    #
-    #                    #
-    ######################
-    parser.add_argument("--seed", type=int, default=42, help="Random seed.")
-    parser.add_argument("--n-rows", type=int, default=10_000, help="Number of rows to load.")
     parser.add_argument(
         "--max-token-length",
         type=int,
@@ -96,47 +98,45 @@ def parse_args():
     return args
 
 
-def kl(input: torch.Tensor, log_target: torch.Tensor) -> torch.Tensor:
-    # input: (B, L, V)
-    # log_target: (B, L, V)
-    # return: (B, L)
-    log_input = torch.log2(input)  # (B, L, V)
-    return (input * (log_input - log_target)).sum(dim=-1)  # (B, L)
-
-
-def jensen(
-    model1: GPT2LMHeadModel,
-    model2: GPT2LMHeadModel,
+def perplexity(
+    model: GPT2LMHeadModel,
     tokenizer: GPT2Tokenizer,
     texts: list[str],
     max_token_length: int,
-) -> list[float] | None:
+) -> list[float]:
     """Compute perplexity of a given text."""
-    device = model1.device
+    device = model.device
     batch = tokenizer(
         texts,
         return_tensors="pt",
-        padding=True,
         truncation=True,
+        padding=True,
         max_length=max_token_length,
     ).to(device)
+    input_ids: torch.Tensor = batch.input_ids  # (B, L)
+    attn_mask: torch.Tensor = batch.attention_mask  # (B, L)
+    logits: torch.Tensor = model(**batch).logits  # (B, L, V)
+    probs = torch.softmax(logits, dim=-1)  # (B, L, V)
+    probs = probs.clamp_(min=1e-10)  # (B, L, V)
+    _input_ids = input_ids[:, 1:]  # (B, L-1)
+    _probs = probs[:, :-1]  # (B, L-1, V)
+    _attn_mask = attn_mask[:, 1:]  # (B, L-1)
+    assert _input_ids.shape[:2] == _probs.shape[:2]
 
-    attn_mask: torch.Tensor = batch.attention_mask  # (batch_size, seq_len)
-    probs1: torch.Tensor = torch.softmax(model1(**batch).logits, dim=-1)  # (B, L, V)
-    probs1 = probs1.clamp_(min=1e-10)
-    probs2: torch.Tensor = torch.softmax(model2(**batch).logits, dim=-1)  # (B, L, V)
-    probs2 = probs2.clamp_(min=1e-10)
-    mix_probs: torch.Tensor = (probs1 + probs2) / 2  # (B, L, V)
-    log_mix_probs: torch.Tensor = torch.log2(mix_probs)  # (B, L, V)
+    # compute ppl
+    tmp = torch.gather(_probs, dim=-1, index=_input_ids.unsqueeze(-1))  # (B, L-1, 1)
+    tmp = tmp.squeeze(-1)  # (B, L-1)
+    log2_tmp = torch.log2(tmp)  # (B, L-1)
+    log2_tmp *= _attn_mask  # (B, L-1)
 
-    jsd = 0.5 * kl(probs1, log_mix_probs) + 0.5 * kl(probs2, log_mix_probs)  # (B, L)
-    jsd *= attn_mask  # (B, L)
-
-    ret = jsd.sum(dim=-1) / attn_mask.sum(dim=-1)  # (B,)
+    ret = 2 ** (-log2_tmp.sum(dim=-1) / _attn_mask.sum(dim=-1))  # (B,)
     return ret.tolist()
 
 
 if __name__ == "__main__":
+    import warnings
+
+    warnings.warn("This script is deprecated. PPL should not be computed here.", DeprecationWarning)
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s [%(levelname)s] %(message)s",
@@ -149,14 +149,24 @@ if __name__ == "__main__":
     #                 #
     ###################
     logging.info(f"Loading input data: {args.input}.")
-    dataset = gen_dataset(args.input, args.data_col)
-    sampled_indices = np.random.choice(
-        len(dataset),
-        size=args.n_rows,
-        replace=False,
-    )
-    test_dataloader = DataLoader(
-        dataset.select(sampled_indices),
+    df = pd.read_csv(args.input)
+    assert args.data_col in df.columns, f"Data Column '{args.data_col}' not in {args.input}."
+    input_data: list[str] = df[args.data_col].to_list()
+    if args.skip is not None:
+        assert args.skip > 0, f"--skip must be greater than 0."
+        logging.info(f"Skipping first {args.skip} rows.")
+        start_idx = args.skip
+    else:
+        start_idx = 0
+    if args.n_rows is not None:
+        assert args.n_rows > 0, f"--n-rows must be greater than 0."
+        end_idx = args.n_rows + start_idx
+    else:
+        end_idx = len(input_data)
+
+    logging.info(f"Processing {end_idx - start_idx} rows.")
+    dataloader = DataLoader(
+        input_data[start_idx:end_idx],
         batch_size=args.batch_size,
         shuffle=False,
         num_workers=4,
@@ -166,18 +176,14 @@ if __name__ == "__main__":
     #    prepare model    #
     #                     #
     #######################
-    logging.info(f"Loading GPT-2 tokenizer from {args.model_dir1}.")
-    tokenizer = GPT2Tokenizer.from_pretrained(args.model_dir1)
-    logging.info(f"Loading GPT-2 model from {args.model_dir1}.")
-    model1 = GPT2LMHeadModel.from_pretrained(
-        args.model_dir1, device_map=0, local_files_only=True
+    logging.info(f"Loading GPT-2 model from {args.model_dir}.")
+    model = GPT2LMHeadModel.from_pretrained(
+        args.model_dir, device_map=0, local_files_only=True
     )  # move to GPU:0
-    model1.eval()
-    logging.info(f"Loading GPT-2 model from {args.model_dir2}.")
-    model2 = GPT2LMHeadModel.from_pretrained(
-        args.model_dir2, device_map=0, local_files_only=True
-    )  # move to GPU:0
-    model2.eval()
+    model.eval()
+    logging.info(f"Loading GPT-2 tokenizer from {args.model_dir}.")
+    tokenizer = GPT2Tokenizer.from_pretrained(args.model_dir)
+    tokenizer.pad_token = tokenizer.eos_token
     #################
     #               #
     #    metrics    #
@@ -186,20 +192,21 @@ if __name__ == "__main__":
     if args.force and osp.exists(args.output):
         logging.warning(f"Overwriting output file.")
     logging.info(f"Compute metrics. Output file: {args.output}.")
-    jsd_list: list[float] = []
+    ppl_list: list[float] = []
     with torch.no_grad():
-        for row in tqdm(test_dataloader, desc="JSD", dynamic_ncols=True):
-            jsds = jensen(model1, model2, tokenizer, row["text"], args.max_token_length)
-            jsd_list.extend(jsds)
+        for texts in tqdm(dataloader, desc="PPL", dynamic_ncols=True):
+            # texts: list[str]
+            ppls = perplexity(model, tokenizer, texts, args.max_token_length)
+            ppl_list.extend(ppls)
 
-    jsd_mean = np.mean(jsd_list)
-    print("jsd_mean:", jsd_mean)
+    ppl_mean = np.mean(ppl_list)
+    print("ppl_mean:", ppl_mean)
     os.makedirs(osp.dirname(osp.abspath(args.output)), exist_ok=True)
     logging.info(f"Saving metrics to {args.output}.")
     with open(args.output, "w") as fp:
         json.dump(
             {
-                "jsd_mean": jsd_mean,
+                "ppl_mean": ppl_mean,
             },
             fp,
         )

@@ -25,6 +25,6 @@ For now, we have 3 modes:
 
 ## Corpus Hints
 
-For IMDB, we use hint `IMDB about movies`.
+For IMDB, we use hint `Movie Reviews`.
 
 For Twitter, we use hint `Twitter`.

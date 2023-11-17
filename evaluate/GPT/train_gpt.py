@@ -117,7 +117,7 @@ if __name__ == "__main__":
         logging_strategy="epoch",
         num_train_epochs=args.epoch,
         weight_decay=1e-3,
-        warmup_steps=1_000,
+        warmup_ratio=0.05,
         lr_scheduler_type=SchedulerType.CONSTANT_WITH_WARMUP,
         learning_rate=args.lr,
         save_strategy="epoch",

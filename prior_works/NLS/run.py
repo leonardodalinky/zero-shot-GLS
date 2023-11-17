@@ -74,6 +74,12 @@ def parse_args():
         help="Column name of the seed used to generate stegotext.",
     )
     parser.add_argument(
+        "--ppl-col",
+        type=str,
+        default="ppl",
+        help="Column name of the ppl of the stegotext.",
+    )
+    parser.add_argument(
         "-o",
         "--output",
         type=str,
@@ -148,14 +154,14 @@ def encrypt(
     max_bpw: int,
     sentence_id: int | None = None,
     complete_sent: bool = False,
-) -> str:
+) -> tuple[str, float]:
     device = model.device
     # decode base64
     bs = codec.base642bits(bs_base64)
     message: list[int] = [int(c) for c in bs.bin]
     with prompt_gen.random_state(seed):
         context_ids = encode_context(context, tokenizer)
-        output_ids = encode_huffman(
+        output_ids, avg_nll = encode_huffman(
             model=model,
             enc=tokenizer,
             message=message,
@@ -163,9 +169,10 @@ def encrypt(
             bits_per_word=max_bpw,
             finish_sent=complete_sent,
             device=device,
-        )[0]
+        )[:2]
+        ppl = 2**avg_nll
         output_text = tokenizer.decode(output_ids)
-        return output_text
+        return output_text, ppl
 
 
 if __name__ == "__main__":
@@ -247,7 +254,7 @@ if __name__ == "__main__":
     ) as gen_context:
         writer = csv.DictWriter(
             fp,
-            fieldnames=input_fieldnames + [args.dst_col, args.seed_col],
+            fieldnames=input_fieldnames + [args.dst_col, args.ppl_col, args.seed_col],
         )
         writer.writeheader()
         for row_idx, row in enumerate(
@@ -255,7 +262,7 @@ if __name__ == "__main__":
         ):
             seed = seeds[row_idx]
             context: str = gen_context(seed=seed)
-            stegotext = encrypt(
+            stegotext, ppl = encrypt(
                 model,
                 tokenizer,
                 context=context,
@@ -265,7 +272,11 @@ if __name__ == "__main__":
                 max_bpw=args.max_bpw,
                 complete_sent=args.complete_sent,
             )
+            # remove all newlines
+            stegotext = stegotext.replace("\n", " ")
+            stegotext = stegotext.replace("\r", " ")
             row[args.dst_col] = stegotext
             row[args.seed_col] = seed
+            row[args.ppl_col] = f"{ppl:.4f}"
             writer.writerow(row)
     logging.info("Done.")
