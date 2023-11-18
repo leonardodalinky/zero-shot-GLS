@@ -151,7 +151,7 @@ def hide_bits_with_prompt_ids_by_egs(
                     # find the target
                     cur_ids = new_ids[tgt_idx].unsqueeze(0)
 
-                    nll = -torch.log2(sorted_probs[cur_idx])
+                    nll = -torch.log2(sorted_probs[tgt_idx])
                     nll_list.append(nll.item())
 
                     temp_strategy.update()
@@ -167,7 +167,7 @@ def hide_bits_with_prompt_ids_by_egs(
                         # find the target
                         cur_ids = new_ids[tgt_idx].unsqueeze(0)
 
-                        nll = -torch.log2(sorted_probs[cur_idx])
+                        nll = -torch.log2(sorted_probs[tgt_idx])
                         nll_list.append(nll.item())
 
                         temp_strategy.update()

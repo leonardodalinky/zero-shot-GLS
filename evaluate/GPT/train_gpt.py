@@ -121,6 +121,7 @@ if __name__ == "__main__":
         lr_scheduler_type=SchedulerType.CONSTANT_WITH_WARMUP,
         learning_rate=args.lr,
         save_strategy="epoch",
+        save_total_limit=2,
         fp16=True,
         seed=args.seed,
     )

@@ -66,6 +66,7 @@ if __name__ == "__main__":
     ppl_mean = np.mean(df[args.ppl_col].values)
     print(f"Average PPL: {ppl_mean:.4f}")
 
+    print("Output to:", args.output)
     with open(args.output, "w") as fp:
         json.dump(
             {
