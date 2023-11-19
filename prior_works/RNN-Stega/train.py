@@ -5,6 +5,9 @@ import os
 import os.path as osp
 from functools import partial
 
+TMP_SAVES_DIR = f"{osp.dirname(__file__)}/../../tmp_saves"
+os.environ["HF_HOME"] = f"{TMP_SAVES_DIR}/hg_cache"
+
 import accelerate
 import torch
 import transformers as tr

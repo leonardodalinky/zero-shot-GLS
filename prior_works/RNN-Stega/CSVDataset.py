@@ -16,7 +16,7 @@ class CSVDataset(Dataset):
         self.col_name = col_name
 
     def __len__(self):
-        return len(self.df)
+        return len(self.data)
 
     def __getitem__(self, idx):
         return {
