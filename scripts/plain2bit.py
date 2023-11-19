@@ -86,10 +86,10 @@ def parse_args():
         help="Number of size bits.",
     )
     parser.add_argument(
-        "--ef-rounds",
+        "--ef-bits",
         type=int,
         default=4,
-        help="Number of EF rounds.",
+        help="Number of EF bits.",
     )
     ####################
     #                  #
@@ -102,7 +102,7 @@ def parse_args():
         args.output
     ), f"{args.output} already exists. Use --force to overwrite."
     assert args.size_bits > 0, f"--size-bits must be greater than 0."
-    assert args.ef_rounds >= 0, f"--ef-rounds must be greater than or equal to 0."
+    assert args.ef_bits >= 0, f"--ef-rounds must be greater than or equal to 0."
 
     return args
 
@@ -114,7 +114,7 @@ def encode(
     plaintext: str,
     max_token_lengh: int,
     size_bits: int,
-    ef_rounds: int,
+    ef_bits: int,
 ) -> tuple[str, str]:
     """Encode plaintext to bitstring.
 
@@ -136,20 +136,20 @@ def encode(
     ).input_ids.to(
         device
     )  # (1, seq_len)
-    bs = codec.encode_token_ids(
+    bs_raw = codec.encode_token_ids(
         model,
         token_ids,
         add_bos_token=True,
-        max_bits_len=(2**size_bits - size_bits - 1),
+        max_bits_len=(2**size_bits - size_bits - ef_bits - 1),
     )
     # w/ ef
-    bs = codec.wrap_bits(bs, size_bits=size_bits, ef_rounds=ef_rounds)
+    bs = codec.wrap_bits(bs_raw, size_bits=size_bits, ef_bits=ef_bits)
     bs = BitStream(bs)
     # pad to multiple of 8 bits
     bs.append("0b0" * (8 - len(bs) % 8))
 
     # w/o ef
-    bs_wo = codec.wrap_bits(bs, size_bits=size_bits, ef_rounds=0)
+    bs_wo = codec.wrap_bits(bs_raw, size_bits=size_bits, ef_bits=ef_bits, enable_ef=False)
     bs_wo = BitStream(bs_wo)
     # pad to multiple of 8 bits
     bs_wo.append("0b0" * (8 - len(bs_wo) % 8))
@@ -222,7 +222,7 @@ if __name__ == "__main__":
                 row[args.src_col],
                 max_token_lengh=args.max_token_length,
                 size_bits=args.size_bits,
-                ef_rounds=args.ef_rounds,
+                ef_bits=args.ef_bits,
             )
             row[args.dst_col] = bits_base64
             row[ex_dst_col] = bits_base64_wo

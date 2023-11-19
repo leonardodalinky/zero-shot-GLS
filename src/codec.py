@@ -130,48 +130,47 @@ def decode_bitstream(
 def wrap_bits(
     bits: ConstBitStream,
     size_bits=8,
-    ef_rounds=4,
+    ef_bits=4,
+    enable_ef=True,
     **kwargs,
 ) -> ConstBitStream:
-    """Wrap bits with size flag and EF encoding.
-
-    Args:
-        bits (ConstBitStream): Bitstream.
-        size_flag_bits (int, optional): Number of bits to indicate the size of the bitstream.
-            Defaults to 8, i.e. maximum of 256 bits.
-        ef_rounds (int, optional): Number of EF rounds. Defaults to 4.
-    """
     size_bs = ConstBitStream(uint=len(bits), length=size_bits)
-    bs = size_bs + bits
-    for _ in range(max(ef_rounds, 0)):
-        bs = _ef_encode(bs)
+    bits = size_bs + bits
+    if enable_ef:
+        bs_list = [bits]
+        for _ in range(1, 2**ef_bits):
+            tmp_bs = _ef_encode(bs_list[-1])
+            bs_list.append(tmp_bs)
+        bs_list_len = [bin(idx).count("1") + count_bs_ones(bs) for idx, bs in enumerate(bs_list)]
+        # find the best bs
+        best_bs_idx = bs_list_len.index(min(bs_list_len))
+        bs = bs_list[best_bs_idx]
+        ef_flag = Bits(uint=best_bs_idx, length=ef_bits)
+    else:
+        ef_flag = Bits(uint=0, length=ef_bits)
+        bs = bits
 
-    return ConstBitStream(bs)
+    return ConstBitStream(ef_flag + bs)
 
 
 def unwrap_bits(
     bits: ConstBitStream,
     size_bits=8,
-    ef_rounds=4,
+    ef_bits=4,
     **kwargs,
 ) -> ConstBitStream:
-    """Unwrap bits with size flag and EF decoding.
-
-    Args:
-        bits (ConstBitStream): Bitstream.
-        size_flag_bits (int, optional): Number of bits to indicate the size of the bitstream.
-            Defaults to 8, i.e. maximum of 256 bits.
-        ef_rounds (int, optional): Number of EF rounds. Defaults to 4.
-    """
-    bs = bits
-    for _ in range(max(ef_rounds, 0)):
+    prefix_len = size_bits + ef_bits
+    assert len(bits) >= prefix_len, f"bits length is too short. {len(bits)} < {prefix_len}"
+    ef_flag: int = bits.peek(f"uint:{ef_bits}")
+    bs = bits[ef_bits:]
+    for _ in range(ef_flag):
         bs = _ef_decode(bs)
 
-    prefix_len = size_bits
-    assert len(bs) >= prefix_len, f"bits length is too short. {len(bs)} < {prefix_len}"
     valid_len = bs.peek(f"uint:{size_bits}")
 
-    return ConstBitStream(bs[prefix_len : prefix_len + valid_len])
+    bs = bs[size_bits : size_bits + valid_len]
+
+    return ConstBitStream(bs)
 
 
 def bits2base64(bits: ConstBitStream) -> str:
@@ -182,6 +181,10 @@ def bits2base64(bits: ConstBitStream) -> str:
 def base642bits(base64_str: str) -> ConstBitStream:
     """Convert base64 string to bits."""
     return ConstBitStream(bytes=base64.b64decode(base64_str.encode("ascii")))
+
+
+def count_bs_ones(bs: ConstBitStream) -> int:
+    return bs.bin.count("1")
 
 
 def _ef_encode(bits: ConstBitStream) -> ConstBitStream:
