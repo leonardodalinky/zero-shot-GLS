@@ -184,7 +184,7 @@ def hide_bits_with_prompt_ids_by_egs(
     if complete_sent:
         return search.enhanced_greedy_search_end(model, cur_ids), is_truncated, bs.pos, ppl
     else:
-        return cur_ids, is_truncated, len(bs), ppl
+        return cur_ids, is_truncated, bs.pos, ppl
 
 
 #########################################################################

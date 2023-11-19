@@ -86,6 +86,12 @@ def parse_args():
         help="Column name of the ppl of the stegotext.",
     )
     parser.add_argument(
+        "--used-bits-col",
+        type=str,
+        default="used_bits",
+        help="Column name of the length of used bits.",
+    )
+    parser.add_argument(
         "-o",
         "--output",
         type=str,
@@ -203,7 +209,7 @@ def encrypt(
     max_new_tokens: int | None = None,
     sentence_id: int | None = None,
     complete_sent: bool = False,
-) -> tuple[str, float]:
+) -> tuple[str, float, int]:
     device = model.device
     # decode base64
     bs = codec.base642bits(bs_base64)
@@ -211,7 +217,7 @@ def encrypt(
         prompt_ids: torch.Tensor = tokenizer(prompt, return_tensors="pt").input_ids.to(
             device
         )  # (1, seq_len)
-        out_ids, is_truncated, _used_bit_len, ppl = hide_extract.hide_bits_with_prompt_ids_by_egs(
+        out_ids, is_truncated, used_bit_len, ppl = hide_extract.hide_bits_with_prompt_ids_by_egs(
             model,
             prompt_ids,
             bs,
@@ -230,7 +236,7 @@ def encrypt(
 
         prompt_len: int = prompt_ids.size(1)
         stego_ids = out_ids[0, prompt_len:-1]  # (new_seq_len - prompt_len - 1,)
-        return tokenizer.decode(stego_ids.tolist()), ppl
+        return tokenizer.decode(stego_ids.tolist()), ppl, used_bit_len
 
 
 if __name__ == "__main__":
@@ -311,7 +317,8 @@ if __name__ == "__main__":
     ) as gen_prompt:
         writer = csv.DictWriter(
             fp,
-            fieldnames=input_fieldnames + [args.dst_col, args.ppl_col, args.seed_col],
+            fieldnames=input_fieldnames
+            + [args.dst_col, args.ppl_col, args.seed_col, args.used_bits_col],
         )
         writer.writeheader()
         for row_idx, row in enumerate(
@@ -323,7 +330,7 @@ if __name__ == "__main__":
                 seed=seed,
                 corpus=args.corpus,
             )
-            stegotext, ppl = encrypt(
+            stegotext, ppl, used_bits = encrypt(
                 model,
                 tokenizer,
                 prompt=prompt,
@@ -341,5 +348,6 @@ if __name__ == "__main__":
             row[args.dst_col] = stegotext
             row[args.seed_col] = seed
             row[args.ppl_col] = f"{ppl:.4f}"
+            row[args.used_bits_col] = used_bits
             writer.writerow(row)
     logging.info("Done.")

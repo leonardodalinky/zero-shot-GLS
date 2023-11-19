@@ -43,6 +43,12 @@ def parse_args():
         default="enc_bits",
     )
     parser.add_argument(
+        "--used-bits-col",
+        type=str,
+        default="used_bits",
+        help="Column name of the length of used bits.",
+    )
+    parser.add_argument(
         "-o",
         "--output",
         type=str,
@@ -87,9 +93,15 @@ if __name__ == "__main__":
     for row in tqdm(df.itertuples(), total=len(df)):
         text = getattr(row, args.data_col)
         word_len = len(word_tokenize(text))
-        bits_base64 = getattr(row, args.bit_col)
-        bits = codec.base642bits(bits_base64)
-        bpws.append(len(bits) / word_len)
+        if hasattr(row, args.used_bits_col):
+            # if the `used_bits` column exists, use it
+            bits_len = int(getattr(row, args.used_bits_col))
+        else:
+            # otherwise, use the length of the bitstream
+            bits_base64 = getattr(row, args.bit_col)
+            bits = codec.base642bits(bits_base64)
+            bits_len = len(bits)
+        bpws.append(bits_len / word_len)
 
     print("Avg. BPW:", np.mean(bpws))
     if args.output is not None:

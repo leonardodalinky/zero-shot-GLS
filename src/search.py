@@ -35,7 +35,7 @@ def beam_search(
 ) -> torch.Tensor:
     assert prompt_input_ids.dim() == 2
     assert prompt_input_ids.size(0) == 1, "Only support batch size 1."
-    model: tr.LlamaForCausalLM
+    model: tr.AutoModelForCausalLM
 
     generation_config = tr.GenerationConfig.from_model_config(model.config)
     eos_id = generation_config.eos_token_id
@@ -65,7 +65,7 @@ def beam_search_end(
 ) -> torch.Tensor:
     assert input_ids.dim() == 2, f"input_ids.dim() = {input_ids.dim()}"
     assert input_ids.size(0) == 1, "Only support batch size 1."
-    model: tr.LlamaForCausalLM
+    model: tr.AutoModelForCausalLM
 
     generation_config = tr.GenerationConfig.from_model_config(model.config)
     # generation_config.length_penalty = -1.0
@@ -84,7 +84,7 @@ def beam_search_end(
 
 @torch.no_grad()
 def enhanced_greedy_search(
-    model: tr.LlamaForCausalLM,
+    model: tr.AutoModelForCausalLM,
     input_ids: torch.Tensor,
     ignored_ids: list[int] = DEFAULT_IGNORED_IDS,
     # fallback_eos_id: int = 1126,  # token `And` in LLaMA
@@ -142,7 +142,7 @@ def enhanced_greedy_search(
 
 @torch.no_grad()
 def enhanced_greedy_search_end(
-    model: tr.LlamaForCausalLM,
+    model: tr.AutoModelForCausalLM,
     input_ids: torch.Tensor,
     attention_mask: torch.Tensor | None = None,
     extra_eos_ids: int = [29889, 29973, 29991],
