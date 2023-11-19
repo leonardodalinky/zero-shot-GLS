@@ -49,3 +49,7 @@ class RNNStega(nn.Module):
         # loss
         loss = F.cross_entropy(logits.reshape(-1, logits.size(-1)), token_ids.reshape(-1))
         return loss
+
+    @property
+    def device(self) -> torch.device:
+        return self.embedding.weight.device

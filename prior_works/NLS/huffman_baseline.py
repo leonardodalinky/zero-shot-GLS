@@ -85,7 +85,7 @@ def encode_huffman(
     avg_KL = total_kl / total_num_for_stats
     words_per_bit = total_num_for_stats / i
 
-    return output[len(context) :].tolist(), avg_NLL, avg_KL, words_per_bit
+    return output[len(context) :].tolist(), min(i, length), avg_NLL, avg_KL, words_per_bit
 
 
 def decode_huffman(model, enc, text, context, bits_per_word, device="cuda"):

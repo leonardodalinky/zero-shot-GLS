@@ -80,6 +80,12 @@ def parse_args():
         help="Column name of the ppl of the stegotext.",
     )
     parser.add_argument(
+        "--used-bits-col",
+        type=str,
+        default="used_bits",
+        help="Column name of the length of used bits.",
+    )
+    parser.add_argument(
         "-o",
         "--output",
         type=str,
@@ -154,14 +160,14 @@ def encrypt(
     max_bpw: int,
     sentence_id: int | None = None,
     complete_sent: bool = False,
-) -> tuple[str, float]:
+) -> tuple[str, float, int]:
     device = model.device
     # decode base64
     bs = codec.base642bits(bs_base64)
     message: list[int] = [int(c) for c in bs.bin]
     with prompt_gen.random_state(seed):
         context_ids = encode_context(context, tokenizer)
-        output_ids, avg_nll = encode_huffman(
+        output_ids, avg_nll, used_bits = encode_huffman(
             model=model,
             enc=tokenizer,
             message=message,
@@ -169,10 +175,10 @@ def encrypt(
             bits_per_word=max_bpw,
             finish_sent=complete_sent,
             device=device,
-        )[:2]
+        )[:3]
         ppl = 2**avg_nll
         output_text = tokenizer.decode(output_ids)
-        return output_text, ppl
+        return output_text, ppl, used_bits
 
 
 if __name__ == "__main__":
@@ -254,7 +260,8 @@ if __name__ == "__main__":
     ) as gen_context:
         writer = csv.DictWriter(
             fp,
-            fieldnames=input_fieldnames + [args.dst_col, args.ppl_col, args.seed_col],
+            fieldnames=input_fieldnames
+            + [args.dst_col, args.ppl_col, args.seed_col, args.used_bits_col],
         )
         writer.writeheader()
         for row_idx, row in enumerate(
@@ -262,7 +269,7 @@ if __name__ == "__main__":
         ):
             seed = seeds[row_idx]
             context: str = gen_context(seed=seed)
-            stegotext, ppl = encrypt(
+            stegotext, ppl, used_bits = encrypt(
                 model,
                 tokenizer,
                 context=context,
@@ -278,5 +285,6 @@ if __name__ == "__main__":
             row[args.dst_col] = stegotext
             row[args.seed_col] = seed
             row[args.ppl_col] = f"{ppl:.4f}"
+            row[args.used_bits_col] = used_bits
             writer.writerow(row)
     logging.info("Done.")
