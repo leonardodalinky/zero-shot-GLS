@@ -120,16 +120,6 @@ def parse_args():
         default=2023,
         help="Seed to generate seeds.",
     )
-    ################
-    #              #
-    #    params    #
-    #              #
-    ################
-    parser.add_argument(
-        "--max-bpw",
-        type=int,
-        default=3,
-    )
     ###################
     #                 #
     #    AC params    #
@@ -170,7 +160,6 @@ def encrypt(
     context: str,
     bs_base64: str,
     seed: int,
-    max_bpw: int,
     sentence_id: int | None = None,
     complete_sent: bool = False,
     # SAAC params
@@ -193,7 +182,6 @@ def encrypt(
             enc=tokenizer,
             message=message,
             context=context_ids,
-            bits_per_word=max_bpw,
             finish_sent=complete_sent,
             device=device,
             temp=temp,
@@ -301,7 +289,6 @@ if __name__ == "__main__":
                 bs_base64=row[args.src_col],
                 seed=seed,
                 sentence_id=row.get("sentence_id"),
-                max_bpw=args.max_bpw,
                 complete_sent=False,
                 temp=args.temp,
                 precision=args.precision,

@@ -44,7 +44,7 @@ def encode_huffman(
             indices = indices[: 2**bits_per_word]
             log_probs = F.log_softmax(logits, dim=-1)[: 2**bits_per_word]
             probs = torch.exp(log_probs)
-            log2_probs = torch.log2(logits)[: 2**bits_per_word]
+            log2_probs = torch.log2(F.softmax(logits, dim=-1))[: 2**bits_per_word]
 
             if i >= length:
                 selection = 0
@@ -85,7 +85,7 @@ def encode_huffman(
     avg_KL = total_kl / total_num_for_stats
     words_per_bit = total_num_for_stats / i
 
-    return output[len(context) :].tolist(), min(i, length), avg_NLL, avg_KL, words_per_bit
+    return output[len(context) :].tolist(), avg_NLL, min(i, length), avg_KL, words_per_bit
 
 
 def decode_huffman(model, enc, text, context, bits_per_word, device="cuda"):

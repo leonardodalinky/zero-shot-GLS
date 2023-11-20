@@ -20,6 +20,7 @@ def encode_saac(
     with_case_study=False,
 ):
     # print(f"message: {message}")
+    length = len(message)
 
     context = torch.tensor(context[-1022:], device=device, dtype=torch.long)
 
@@ -166,7 +167,7 @@ def encode_saac(
 
             # corners force to stop
             if step_cnt >= max_step:
-                print("WARNING: reach maximum decoding steps")
+                print("WARNING: reach maximum encoding steps")
                 break
 
     avg_NLL = -total_log2_probs / total_num_for_stats
@@ -177,7 +178,7 @@ def encode_saac(
     return (
         output[len(context) :].tolist(),
         avg_NLL,
-        i,
+        min(i, length),
         avg_KL,
         words_per_bit,
         avg_Hq,

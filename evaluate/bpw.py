@@ -89,6 +89,10 @@ if __name__ == "__main__":
     ###################
     logging.info(f"Loading input data: {args.input}.")
     df = pd.read_csv(args.input)
+    if args.used_bits_col not in df.columns:
+        logging.warning(
+            f"{args.used_bits_col} not found in input data. Using the length of bit column `{args.bit_col}` instead."
+        )
     bpws = []
     for row in tqdm(df.itertuples(), total=len(df)):
         text = getattr(row, args.data_col)

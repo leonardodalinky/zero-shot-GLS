@@ -141,3 +141,8 @@ if __name__ == "__main__":
     )
 
     trainer.train()
+
+    # create soft link to last save
+    steps_per_epoch = len(tokenized_dataset) // train_args.per_device_train_batch_size
+    ckpt_name = f"checkpoint-{args.epoch * steps_per_epoch}"
+    os.symlink(ckpt_name, osp.realpath(f"{args.save_dir}/ckpt"))
