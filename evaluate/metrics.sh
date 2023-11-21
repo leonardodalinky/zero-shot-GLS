@@ -37,14 +37,14 @@ echo ""
 echo "Training model for jsd..."
 python GPT/train_gpt.py $filepath \
     --data-col "stegotext" \
-    --save-dir $train_savedir/$filename_woext
+    --save-dir $train_savedir/$filename_no_ext
 echo ""
 # jsd compute
 echo "Computing jsd..."
 python GPT/jsd.py $baseline_filepath \
     --data-col "plaintext" \
     --force \
-    -o $savedir/jsd.json \
+    -o $savedir/$filename_no_ext/jsd.json \
     --model-dir1 $baseline_modeldir \
     --model-dir2 $train_savedir/$filename_no_ext/ckpt
 echo ""
