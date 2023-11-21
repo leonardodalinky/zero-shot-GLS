@@ -16,6 +16,11 @@ import tiktoken
 from func_timeout import FunctionTimedOut, func_timeout
 from tqdm import tqdm
 
+# NOTE: change this to change the topic for relevance
+RELEVANCE_TOPIC: str = None
+# RELEVANCE_TOPIC = "movie reviews"
+# RELEVANCE_TOPIC = "tweets in Twitter"
+
 MAX_RETRY = 3
 logging.basicConfig(
     level=logging.INFO,
@@ -66,6 +71,7 @@ parser.add_argument(
 parser.add_argument(
     "--col2", type=str, default="stegotext", help="Column name for text in `input2` to be compared."
 )
+parser.add_argument("--topic", type=str, default=None, help="Topic for relevance judge.")
 
 failed_cases = []
 
@@ -81,14 +87,60 @@ def count_input_tokens(tokenizer, messages) -> int:
     return sum([len(tokenizer.encode(m["content"])) for m in messages])
 
 
-def gen_relevance_prompts(sent1: str, sent2: str):
+def gen_soundness_prompts(sent1: str, sent2: str):
     sent1 = sent1.strip()
     sent2 = sent2.strip()
     return [
         {"role": "system", "content": "You are a helpful assistant."},
         {
             "role": "system",
-            "content": """The user will input 2 sentences. You have to decide which one is more likely to be part of some "movie reviews". This is important to the user's career.
+            "content": """The user will input 2 sentences. You have to decide which one is more logically sound and meaningful. This is important to the user's career.
+The result should be in JSON. It should contain the key "result" with value being either 0 or 1, indicating the first or second one.
+""",
+        },
+        {
+            "role": "user",
+            "content": f"""
+0. {sent1}
+
+1. {sent2}
+""",
+        },
+    ]
+
+
+def gen_relevance_prompts(sent1: str, sent2: str):
+    global RELEVANCE_TOPIC
+    assert RELEVANCE_TOPIC is not None
+    sent1 = sent1.strip()
+    sent2 = sent2.strip()
+    return [
+        {"role": "system", "content": "You are a helpful assistant."},
+        {
+            "role": "system",
+            "content": f"""The user will input 2 sentences. You have to decide which one is more likely to be part of some "{RELEVANCE_TOPIC}". This is important to the user's career.
+The result should be in JSON. It should contain the key "result" with value being either 0 or 1, indicating the first or second one.
+""",
+        },
+        {
+            "role": "user",
+            "content": f"""
+0. {sent1}
+
+1. {sent2}
+""",
+        },
+    ]
+
+
+def gen_engagingness_prompts(sent1: str, sent2: str):
+    sent1 = sent1.strip()
+    sent2 = sent2.strip()
+    return [
+        {"role": "system", "content": "You are a helpful assistant."},
+        {
+            "role": "system",
+            "content": """The user will input 2 sentences. You have to decide which one is more engaging and appealing to readers. This is important to the user's career.
 The result should be in JSON. It should contain the key "result" with value being either 0 or 1, indicating the first or second one.
 """,
         },
@@ -149,8 +201,12 @@ def judge(pair: tuple[str, str, bool, int, str, int]) -> tuple[int, bool | None]
     idx, mode, timeout = pair[3:]
     # select prompt type
     match mode:
+        case "soundness":
+            gen_prompts_func = gen_soundness_prompts
         case "relevance":
             gen_prompts_func = gen_relevance_prompts
+        case "engagingness":
+            gen_prompts_func = gen_engagingness_prompts
         case _:
             raise NotImplementedError
 
@@ -185,8 +241,21 @@ def main():
     args = parser.parse_args()
     # check output path
     output_path = Path(args.output)
-    if output_path.exists() and not args.force:
-        raise FileExistsError(f"Output file {args.output} already exists.")
+    if output_path.exists():
+        if not args.force:
+            raise FileExistsError(f"Output file {args.output} already exists.")
+        else:
+            logging.warning(f"Output file {args.output} already exists. Overwriting.")
+    # check topic for relevance
+    if args.mode == "relevance":
+        if args.topic is None:
+            raise argparse.ArgumentError(
+                None, "Topic for relevance judge is not set. See `--topic`."
+            )
+        else:
+            global RELEVANCE_TOPIC
+            logging.info(f"Using topic {RELEVANCE_TOPIC} for relevance judge.")
+            RELEVANCE_TOPIC = args.topic
 
     # set openai api key
     logging.info("Setting OpenAI API key.")
@@ -255,6 +324,7 @@ def main():
 
     logging.info(f"Valid results: {valid_result_cnt}/{len(output_pairs)}.")
     logging.info(f"True results: {true_result_cnt}/{valid_result_cnt}.")
+    logging.info(f"True ratio: {true_result_cnt / valid_result_cnt:.4f}.")
 
     # write output file
     logging.info(f"Writing output file: {args.output}.")
