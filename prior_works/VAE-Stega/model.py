@@ -17,7 +17,7 @@ class Encoder(nn.Module):
             input_ids, attention_mask=attention_mask
         ).last_hidden_state  # (B, S, D)
 
-        return last_hidden_state
+        return last_hidden_state[:, 0, :]  # (B, D)
 
     @property
     def hidden_size(self) -> int:
@@ -88,7 +88,12 @@ class VAE(nn.Module):
         self.encoder = Encoder()
         self.hidden_to_mu = nn.Linear(self.encoder.hidden_size, n_z)
         self.hidden_to_logvar = nn.Linear(self.encoder.hidden_size, n_z)
-        self.generator = Generator(n_layer=n_layer, n_z=n_z)
+        self.generator = Generator(
+            vocab_size=self.encoder.vocab_size,
+            hidden_size=self.encoder.hidden_size,
+            n_layer=n_layer,
+            n_z=n_z,
+        )
         self.n_z = n_z
 
     def forward(

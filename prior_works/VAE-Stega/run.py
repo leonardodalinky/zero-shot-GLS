@@ -299,7 +299,7 @@ if __name__ == "__main__":
         n_layer=args.num_layers,
         n_z=args.num_z,
     )
-    accelerator = accelerate.Accelerator()
+    accelerator = accelerate.Accelerator(mixed_precision="fp16")
     model = model.to(accelerator.device)
     logging.info(f"Loading model from {args.ckpt_dir}.")
     model = accelerator.prepare(model)

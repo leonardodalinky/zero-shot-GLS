@@ -95,7 +95,7 @@ def create_generator_input(x: torch.Tensor, tokenizer: tr.AutoTokenizer):
         :, : x.size(1) - 1
     ].clone()  # input for generator should exclude last word of sequence
 
-    r = torch.rand_like((G_inp))
+    r = torch.rand((G_inp.size(0), G_inp.size(1)))
     # Perform word_dropout according to random values (r) generated for each word
     for i in range(G_inp.size(0)):
         for j in range(1, G_inp.size(1)):
@@ -133,7 +133,7 @@ def main():
         format="%(asctime)s [%(levelname)s] %(message)s",
     )
     args = parse_args()
-    accelerator = accelerate.Accelerator()
+    accelerator = accelerate.Accelerator(mixed_precision="fp16")
     accelerate.utils.set_seed(args.seed)
     device = accelerator.device
     ###################
@@ -205,11 +205,19 @@ def main():
             )
             tokenized = tokenized.to(device)
             input_ids = tokenized.input_ids
+            attn_mask = tokenized.attention_mask
             # append [CLS]
             input_ids = torch.cat(
                 [
                     torch.full_like(input_ids[:, :1], tokenizer.cls_token_id),
                     input_ids,
+                ],
+                dim=1,
+            )
+            attn_mask = torch.cat(
+                [
+                    torch.full_like(attn_mask[:, :1], 1),
+                    attn_mask,
                 ],
                 dim=1,
             )
@@ -219,7 +227,7 @@ def main():
             loss, rec_loss, kl_loss = train_batch(
                 vae=model,
                 input_ids=input_ids,
-                attn_mask=tokenized.attention_mask,
+                attn_mask=attn_mask,
                 G_inp=G_inp,
                 step=step,
             )
