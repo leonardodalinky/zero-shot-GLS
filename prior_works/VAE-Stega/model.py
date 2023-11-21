@@ -51,6 +51,7 @@ class Generator(nn.Module):
 
     def forward(self, input_ids, z, g_hidden=None):
         # input_ids: (B, S)
+        # z: (B, Z)
         x = self.embedding(input_ids)  # (B, S, D)
         B, S, _ = x.size()
         z = torch.cat([z] * S, dim=1).view(
@@ -72,6 +73,8 @@ class Generator(nn.Module):
         output, hidden = self.lstm(x, hidden)
         output = self.fc(output)
 
+        # output: (B, S, V)
+        # hidden: ((L, B, D), (L, B, D))
         return output, hidden  # Also return complete (h_T, c_T) incase if we are testing
 
     @property
@@ -94,7 +97,7 @@ class VAE(nn.Module):
         attention_mask: torch.Tensor,
         G_input: torch.Tensor,
         z: torch.Tensor | None = None,
-        G_hidden: torch.Tensor | None = None,
+        G_hidden: list[torch.Tensor] | None = None,
     ):
         # input_ids: (B, S)
         # attention_mask: (B, S)
