@@ -9,6 +9,7 @@ TMP_SAVES_DIR = f"{osp.dirname(__file__)}/../../tmp_saves"
 os.environ["HF_HOME"] = f"{TMP_SAVES_DIR}/hg_cache"
 
 import accelerate
+import numpy as np
 import torch
 import transformers as tr
 from torch.utils.data import DataLoader
@@ -18,7 +19,7 @@ from tqdm import tqdm
 tqdm = partial(tqdm, dynamic_ncols=True)
 
 # isort: split
-from CSVDataset import CSVDataset
+from CSVDataset import create_train_test_datasets
 from model import RNNStega
 
 
@@ -50,6 +51,7 @@ def parse_args():
     #    Dataset Args    #
     #                    #
     ######################
+    parser.add_argument("--train-ratio", type=float, default=0.85, help="Train ratio.")
     parser.add_argument("--seed", type=int, default=42, help="Random seed.")
     #######################
     #                     #
@@ -92,7 +94,7 @@ def main():
         format="%(asctime)s [%(levelname)s] %(message)s",
     )
     args = parse_args()
-    accelerator = accelerate.Accelerator()
+    accelerator = accelerate.Accelerator(mixed_precision="fp16")
     accelerate.utils.set_seed(args.seed)
     device = accelerator.device
     ###################
@@ -101,9 +103,18 @@ def main():
     #                 #
     ###################
     logging.info(f"Loading input data: {args.input}.")
-    dataset = CSVDataset(args.input, args.data_col)
-    dataloader = DataLoader(
-        dataset=dataset,
+    train_dataset, test_dataset = create_train_test_datasets(
+        args.input, args.data_col, train_ratio=args.train_ratio, seed=args.seed
+    )
+    train_dataloader = DataLoader(
+        dataset=train_dataset,
+        batch_size=args.batch_size,
+        shuffle=True,
+        num_workers=4,
+        pin_memory=True,
+    )
+    test_dataloader = DataLoader(
+        dataset=test_dataset,
         batch_size=args.batch_size,
         shuffle=True,
         num_workers=4,
@@ -126,6 +137,7 @@ def main():
         hidden_dim=args.hidden_dim,
         num_layers=args.num_layers,
         dropout=args.dropout,
+        pad_token_id=tokenizer.pad_token_id,
     )
     model.to(device)
     logging.info(f"Model summary:\n{model_summary(model)}")
@@ -141,8 +153,8 @@ def main():
     #    prapare    #
     #               #
     #################
-    model, dataloader, optimizer, lr_scheduler = accelerator.prepare(
-        model, dataloader, optimizer, lr_scheduler
+    model, train_dataloader, test_dataloader, optimizer, lr_scheduler = accelerator.prepare(
+        model, train_dataloader, test_dataloader, optimizer, lr_scheduler
     )
 
     ##################
@@ -151,10 +163,18 @@ def main():
     #                #
     ##################
     logging.info("Start training. Good luck!")
-    model.train()
     for epoch in tqdm(range(1, args.epoch + 1), desc="Epoch"):
-        loss_list: list[float] = []
-        for batch in tqdm(dataloader, desc="Batch"):
+        train_loss_list: list[float] = []
+        test_loss_list: list[float] = []
+        best_loss = np.inf
+        best_epoch = 0
+        #####################
+        #                   #
+        #    train phase    #
+        #                   #
+        #####################
+        model.train()
+        for batch in tqdm(train_dataloader, desc="Train-Batch"):
             # tokenize
             text: list[str] = batch["text"]
             token_ids: torch.Tensor = tokenizer(
@@ -167,17 +187,55 @@ def main():
             token_ids = token_ids.to(device)
 
             loss = model.forward_train(token_ids)
-            loss_list.append(loss.item())
+            train_loss_list.append(loss.item())
 
             optimizer.zero_grad()
             accelerator.backward(loss)
             optimizer.step()
             lr_scheduler.step()
-        logging.info(f"Epoch {epoch}: loss = {sum(loss_list) / len(loss_list)}")
+        ####################
+        #                  #
+        #    test phase    #
+        #                  #
+        ####################
+        model.eval()
+        with torch.no_grad():
+            for batch in tqdm(test_dataloader, desc="Test-Batch"):
+                # tokenize
+                text: list[str] = batch["text"]
+                token_ids: torch.Tensor = tokenizer(
+                    text,
+                    padding="longest",
+                    truncation=True,
+                    max_length=args.max_token_length,
+                    return_tensors="pt",
+                ).input_ids
+                token_ids = token_ids.to(device)
+
+                loss = model.forward_train(token_ids)
+                test_loss_list.append(loss.item())
+        logging.info(
+            f"Epoch {epoch}: train_loss = {np.mean(train_loss_list):.4f}, test_loss = {np.mean(test_loss_list):.4f}"
+        )
+        # regular save
         if epoch % args.save_interval == 0:
             ckpt_dir = osp.join(args.save_dir, f"epoch_{epoch}")
             logging.info(f"Saving model to {ckpt_dir}.")
             accelerator.save_state(ckpt_dir)
+        # best save
+        if (avg_test_loss := np.mean(test_loss_list)) < best_loss:
+            best_loss = avg_test_loss
+            best_epoch = epoch
+            best_dir = osp.join(args.save_dir, "best")
+            logging.info(f"Saving best model to {args.save_dir} at Epoch {epoch}.")
+            accelerator.save_state(best_dir)
+        else:
+            logging.info(f"Best model is still at Epoch {best_epoch}.")
+
+    # indicate best model epoch
+    with open(osp.join(args.save_dir, "best_epoch.txt"), "w") as fp:
+        fp.write(f"{best_epoch}\n")
+
     # create soft link to last checkpoint
     logging.info("Creating soft link to last checkpoint.")
     last_checkpoint_dir = osp.join(args.save_dir, f"epoch_{args.epoch}")

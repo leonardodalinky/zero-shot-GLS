@@ -208,6 +208,7 @@ def encrypt(
         for _ in range(max_new_tokens):
             # TODO: VAE infer
             logits, G_hidden = model.generator(input_ids, z, G_hidden)
+            logits = logits.double()
             logits[tokenizer.cls_token_id] = -10
             logits[tokenizer.sep_token_id] = -10
             logits[tokenizer.pad_token_id] = -10

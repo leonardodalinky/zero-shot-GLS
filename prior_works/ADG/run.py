@@ -19,8 +19,7 @@ import torch.nn.functional as F
 from tqdm import tqdm
 
 # isort: split
-import Huffman_Encoding
-from model import RNNStega
+from model import ADG
 
 os.environ["HF_HOME"] = f"{osp.dirname(__file__)}/../../tmp_saves/hg_cache"
 sys.path.append(f"{osp.dirname(osp.abspath(__file__))}/../../src")
@@ -153,7 +152,7 @@ def parse_args():
 
 
 def prepare_start_ids(
-    model: RNNStega,
+    model: ADG,
     tokenizer: tr.AutoTokenizer,
 ) -> torch.Tensor:
     ids = torch.tensor([[tokenizer.bos_token_id]], dtype=torch.long, device=model.device)  # (1, 1)
@@ -176,9 +175,45 @@ def prepare_start_ids(
     return start_ids
 
 
+# e.g. [0, 1, 1, 1] looks like 1110=14
+def bits2int(bits):
+    res = 0
+    for i, bit in enumerate(bits):
+        res += bit * (2**i)
+    return res
+
+
+def int2bits(inp, num_bits):
+    if num_bits == 0:
+        return []
+    strlist = ("{0:0%db}" % num_bits).format(inp)
+    return [int(strval) for strval in reversed(strlist)]
+
+
+def near(alist, anum):
+    up = len(alist) - 1
+    if up == 0:
+        return 0
+    bottom = 0
+    while up - bottom > 1:
+        index = int((up + bottom) / 2)
+        if alist[index] < anum:
+            up = index
+        elif alist[index] > anum:
+            bottom = index
+        else:
+            return index
+    if up - bottom == 1:
+        if alist[bottom] - anum < anum - up:
+            index = bottom
+        else:
+            index = up
+    return index
+
+
 @torch.no_grad()
 def encrypt(
-    model: RNNStega,
+    model: ADG,
     tokenizer: tr.AutoTokenizer,
     bs_base64: str,
     seed: int,
@@ -189,41 +224,70 @@ def encrypt(
     device = model.device
     # decode base64
     bs = codec.base642bits(bs_base64)
-    message: str = bs.bin
+    bit_stream: str = bs.bin
     with prompt_gen.random_state(seed):
         bit_index = 0
         input_ids = prepare_start_ids(model, tokenizer=tokenizer)  # (1, S)
         nll_list: list[float] = []
         for _ in range(max_new_tokens):
-            logits: torch.Tensor = model(input_ids)[0, -1]  # (V,)
+            logits: torch.Tensor = model(input_ids, logits=True)[0, -1]  # (V,)
             logits = logits.double()
             logits[tokenizer.bos_token_id] = -10
             logits[tokenizer.eos_token_id] = -10
             logits[tokenizer.pad_token_id] = -10
             probs = F.softmax(logits, dim=-1)  # (V,)
-            sorted_probs, sorted_indices = torch.sort(probs, descending=True)
-            sorted_probs: list[float] = sorted_probs.tolist()[: 2**max_bpw]
-            sorted_indices: list[int] = sorted_indices.tolist()[: 2**max_bpw]
-            # huffman
-            nodes = Huffman_Encoding.createNodes(sorted_probs)
-            root = Huffman_Encoding.createHuffmanTree(nodes)
-            codes = Huffman_Encoding.huffmanEncoding(nodes, root)
+            probs, indices = probs.sort(descending=True)
+            # start recursion
+            bit_tmp = 0
+            while probs[0] <= 0.5:
+                # embedding bit
+                bit = 1
+                while (1 / 2 ** (bit + 1)) > probs[0]:
+                    bit += 1
+                mean = 1 / 2**bit
+                # dp
+                probs = probs.tolist()
+                indices = indices.tolist()
+                result = []
+                for i in range(2**bit):
+                    result.append([[], []])
+                for i in range(2**bit - 1):
+                    result[i][0].append(probs[0])
+                    result[i][1].append(indices[0])
+                    del probs[0]
+                    del indices[0]
+                    while sum(result[i][0]) < mean:
+                        delta = mean - sum(result[i][0])
+                        index = near(probs, delta)
+                        if probs[index] - delta < delta:
+                            result[i][0].append(probs[index])
+                            result[i][1].append(indices[index])
+                            del probs[index]
+                            del indices[index]
+                        else:
+                            break
+                    mean = sum(probs) / (2**bit - i - 1)
+                result[2**bit - 1][0].extend(probs)
+                result[2**bit - 1][1].extend(indices)
+                # read secret message
+                bit_embed = [
+                    int(_) for _ in bit_stream[bit_index + bit_tmp : bit_index + bit_tmp + bit]
+                ]
+                int_embed = bits2int(bit_embed)
+                # updating
+                probs = torch.FloatTensor(result[int_embed][0]).to(device)
+                indices = torch.LongTensor(result[int_embed][1]).to(device)
+                probs = probs / probs.sum()
+                probs, _ = probs.sort(descending=True)
+                indices = indices[_]
+                bit_tmp += bit
 
-            for i in range(2**max_bpw):
-                if message[bit_index : bit_index + 1 + i] in codes:
-                    code_index = codes.index(message[bit_index : bit_index + 1 + i])
-                    nll_list.append(-math.log2(sorted_probs[code_index]))
-                    gen_word_id = sorted_indices[code_index]
-                    bit_index = bit_index + 1 + i
-                    input_ids = torch.cat(
-                        [
-                            input_ids,
-                            torch.tensor([[gen_word_id]], dtype=torch.long, device=device),
-                        ],
-                        dim=-1,
-                    )
-                    break
-            else:
+            # terminate
+            gen = int(indices[int(torch.multinomial(probs, 1))])
+            nll_list.append(-math.log2(probs[gen].item()))
+            input_ids = torch.cat([input_ids, torch.LongTensor([[gen]], device=device)], dim=1)
+            bit_index += bit_tmp
+            if bit_index >= len(bit_stream):
                 break
 
         avg_nll = sum(nll_list) / len(nll_list)
@@ -284,12 +348,13 @@ if __name__ == "__main__":
     torch.use_deterministic_algorithms(True, warn_only=True)
 
     tokenizer = tr.AutoTokenizer.from_pretrained("facebook/opt-125m")
-    model: RNNStega = RNNStega(
+    model: ADG = ADG(
         vocab_size=tokenizer.vocab_size,
         embedding_dim=args.embed_dim,
         hidden_dim=args.hidden_dim,
         num_layers=args.num_layers,
         dropout=args.dropout,
+        pad_token_id=tokenizer.pad_token_id,
     )
     accelerator = accelerate.Accelerator(mixed_precision="fp16")
     model = model.to(accelerator.device)
@@ -314,7 +379,7 @@ if __name__ == "__main__":
         )
         writer.writeheader()
         for row_idx, row in enumerate(
-            tqdm(input_data[start_idx:end_idx], desc="RNNStega-Bits-To-Stego", dynamic_ncols=True)
+            tqdm(input_data[start_idx:end_idx], desc="ADG-Bits-To-Stego", dynamic_ncols=True)
         ):
             seed = seeds[row_idx]
             stegotext, ppl, used_bits = encrypt(

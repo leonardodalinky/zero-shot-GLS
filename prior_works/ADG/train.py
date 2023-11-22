@@ -1,19 +1,16 @@
 """Train the RNN-Stega model."""
 import argparse
 import logging
-import math
 import os
 import os.path as osp
 from functools import partial
-
-import numpy as np
 
 TMP_SAVES_DIR = f"{osp.dirname(__file__)}/../../tmp_saves"
 os.environ["HF_HOME"] = f"{TMP_SAVES_DIR}/hg_cache"
 
 import accelerate
+import numpy as np
 import torch
-import torch.nn.functional as F
 import transformers as tr
 from torch.utils.data import DataLoader
 from torchinfo import summary as model_summary
@@ -22,15 +19,13 @@ from tqdm import tqdm
 tqdm = partial(tqdm, dynamic_ncols=True)
 
 # isort: split
-from CSVDataset import CSVDataset
-from model import VAE
-
-WORD_DROPOUT = 0.5
+from CSVDataset import create_train_test_datasets
+from model import ADG
 
 
 def parse_args():
     parser = argparse.ArgumentParser(
-        "Train VAE-Stega model to fit the data.",
+        "Train ADG model to fit the data.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     ###############
@@ -56,29 +51,35 @@ def parse_args():
     #    Dataset Args    #
     #                    #
     ######################
+    parser.add_argument("--train-ratio", type=float, default=0.85, help="Train ratio.")
     parser.add_argument("--seed", type=int, default=42, help="Random seed.")
     #######################
     #                     #
     #    Training Args    #
     #                     #
     #######################
-    parser.add_argument("--epoch", type=int, default=20, help="Number of epochs to train.")
-    parser.add_argument("--lr", type=float, default=3e-4, help="Learning rate for training.")
-    parser.add_argument("--batch-size", type=int, default=32, help="Batch size for training.")
+    parser.add_argument("--epoch", type=int, default=100, help="Number of epochs to train.")
+    parser.add_argument("--lr", type=float, default=1e-3, help="Learning rate for training.")
+    parser.add_argument("--batch-size", type=int, default=128, help="Batch size for training.")
     parser.add_argument(
         "--max-token-length",
         type=int,
         default=128,
         help="Maximum token length for training.",
     )
-    parser.add_argument("--save-interval", type=int, default=5, help="Save interval.")
+    parser.add_argument("--save-interval", type=int, default=20, help="Save interval.")
     ####################
     #                  #
     #    Model Args    #
     #                  #
     ####################
-    parser.add_argument("--num-layers", type=int, default=2, help="Number of LSTM layers.")
-    parser.add_argument("--num-z", type=int, default=128, help="Dimension of z latent.")
+    parser.add_argument(
+        "--cell", type=str, default="lstm", choices=["lstm", "gru", "rnn"], help="Cell type."
+    )
+    parser.add_argument("--embed-dim", type=int, default=384, help="Embedding dimension.")
+    parser.add_argument("--hidden-dim", type=int, default=768, help="Hidden dimension.")
+    parser.add_argument("--num-layers", type=int, default=2, help="Number of layers.")
+    parser.add_argument("--dropout", type=float, default=0.5, help="Dropout rate.")
     ####################
     #                  #
     #    Validating    #
@@ -88,44 +89,6 @@ def parse_args():
     assert osp.exists(args.input), f"Input file {args.input} does not exist."
 
     return args
-
-
-def create_generator_input(x: torch.Tensor, tokenizer: tr.AutoTokenizer):
-    G_inp = x[
-        :, : x.size(1) - 1
-    ].clone()  # input for generator should exclude last word of sequence
-
-    r = torch.rand((G_inp.size(0), G_inp.size(1)))
-    # Perform word_dropout according to random values (r) generated for each word
-    for i in range(G_inp.size(0)):
-        for j in range(1, G_inp.size(1)):
-            if r[i, j] < WORD_DROPOUT and G_inp[i, j] not in [
-                tokenizer.pad_token_id,
-                tokenizer.cls_token_id,
-            ]:
-                G_inp[i, j] = tokenizer.mask_token_id
-
-    return G_inp
-
-
-def train_batch(
-    vae: VAE,
-    input_ids: torch.Tensor,
-    attn_mask: torch.Tensor,
-    G_inp: torch.Tensor,
-    step: int,
-    pad_token_id: int | None = None,
-):
-    logit, _, kld = vae(input_ids, attn_mask, G_inp, None, None)
-    # logit: (B, S, V - 1)
-    # NOTE: the `G_inp` has already cut the last token
-    logit = logit.reshape(-1, logit.size(2))
-    input_ids = input_ids[:, 1:]  # target for generator should exclude first word of sequence
-    input_ids = input_ids.reshape(-1)
-    rec_loss = F.cross_entropy(logit, input_ids, ignore_index=pad_token_id)
-    kld_coef = (math.tanh((step - 15000) / 1000) + 1) / 2
-    loss = 7 * rec_loss + kld_coef * kld
-    return loss, rec_loss, kld
 
 
 def main():
@@ -143,9 +106,18 @@ def main():
     #                 #
     ###################
     logging.info(f"Loading input data: {args.input}.")
-    dataset = CSVDataset(args.input, args.data_col)
-    dataloader = DataLoader(
-        dataset=dataset,
+    train_dataset, test_dataset = create_train_test_datasets(
+        args.input, args.data_col, train_ratio=args.train_ratio, seed=args.seed
+    )
+    train_dataloader = DataLoader(
+        dataset=train_dataset,
+        batch_size=args.batch_size,
+        shuffle=True,
+        num_workers=4,
+        pin_memory=True,
+    )
+    test_dataloader = DataLoader(
+        dataset=test_dataset,
         batch_size=args.batch_size,
         shuffle=True,
         num_workers=4,
@@ -156,13 +128,21 @@ def main():
     #    load vocab & tokenizer    #
     #                              #
     ################################
-    tokenizer = tr.AutoTokenizer.from_pretrained("distilbert-base-uncased")
+    tokenizer = tr.AutoTokenizer.from_pretrained("facebook/opt-125m")
     ####################
     #                  #
     #    load model    #
     #                  #
     ####################
-    model: VAE = VAE(n_layer=args.num_layers, n_z=args.num_z)
+    model: ADG = ADG(
+        cell=args.cell,
+        vocab_size=tokenizer.vocab_size,
+        embedding_dim=args.embed_dim,
+        hidden_dim=args.hidden_dim,
+        num_layers=args.num_layers,
+        dropout=args.dropout,
+        pad_token_id=tokenizer.pad_token_id,
+    )
     model.to(device)
     logging.info(f"Model summary:\n{model_summary(model)}")
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr)
@@ -177,8 +157,8 @@ def main():
     #    prapare    #
     #               #
     #################
-    model, dataloader, optimizer, lr_scheduler = accelerator.prepare(
-        model, dataloader, optimizer, lr_scheduler
+    model, train_dataloader, test_dataloader, optimizer, lr_scheduler = accelerator.prepare(
+        model, train_dataloader, test_dataloader, optimizer, lr_scheduler
     )
 
     ##################
@@ -187,68 +167,79 @@ def main():
     #                #
     ##################
     logging.info("Start training. Good luck!")
-    model.train()
-    step = 0
     for epoch in tqdm(range(1, args.epoch + 1), desc="Epoch"):
-        loss_list: list[float] = []
-        rec_loss_list: list[float] = []
-        kl_loss_list: list[float] = []
-        for batch in tqdm(dataloader, desc="Batch"):
+        train_loss_list: list[float] = []
+        test_loss_list: list[float] = []
+        best_loss = np.inf
+        best_epoch = 0
+        #####################
+        #                   #
+        #    train phase    #
+        #                   #
+        #####################
+        model.train()
+        for batch in tqdm(train_dataloader, desc="Train-Batch"):
             # tokenize
             text: list[str] = batch["text"]
-            tokenized = tokenizer(
+            token_ids: torch.Tensor = tokenizer(
                 text,
                 padding="longest",
                 truncation=True,
-                max_length=args.max_token_length - 1,
-                add_special_tokens=False,
+                max_length=args.max_token_length,
                 return_tensors="pt",
-            )
-            tokenized = tokenized.to(device)
-            input_ids = tokenized.input_ids
-            attn_mask = tokenized.attention_mask
-            # append [CLS]
-            input_ids = torch.cat(
-                [
-                    torch.full_like(input_ids[:, :1], tokenizer.cls_token_id),
-                    input_ids,
-                ],
-                dim=1,
-            )
-            attn_mask = torch.cat(
-                [
-                    torch.full_like(attn_mask[:, :1], 1),
-                    attn_mask,
-                ],
-                dim=1,
-            )
+            ).input_ids
+            token_ids = token_ids.to(device)
 
-            G_inp = create_generator_input(input_ids, tokenizer)
-
-            loss, rec_loss, kl_loss = train_batch(
-                vae=model,
-                input_ids=input_ids,
-                attn_mask=attn_mask,
-                G_inp=G_inp,
-                step=step,
-                pad_token_id=tokenizer.pad_token_id,
-            )
-
-            loss_list.append(loss.item())
-            rec_loss_list.append(rec_loss.item())
-            kl_loss_list.append(kl_loss.item())
+            loss = model.forward_train(token_ids)
+            train_loss_list.append(loss.item())
 
             optimizer.zero_grad()
             accelerator.backward(loss)
             optimizer.step()
             lr_scheduler.step()
+        ####################
+        #                  #
+        #    test phase    #
+        #                  #
+        ####################
+        model.eval()
+        with torch.no_grad():
+            for batch in tqdm(test_dataloader, desc="Test-Batch"):
+                # tokenize
+                text: list[str] = batch["text"]
+                token_ids: torch.Tensor = tokenizer(
+                    text,
+                    padding="longest",
+                    truncation=True,
+                    max_length=args.max_token_length,
+                    return_tensors="pt",
+                ).input_ids
+                token_ids = token_ids.to(device)
+
+                loss = model.forward_train(token_ids)
+                test_loss_list.append(loss.item())
         logging.info(
-            f"Epoch {epoch}: loss = {np.mean(loss_list)}, rec_loss = {np.mean(rec_loss_list)}, kl_loss = {np.mean(kl_loss_list)}"
+            f"Epoch {epoch}: train_loss = {np.mean(train_loss_list):.4f}, test_loss = {np.mean(test_loss_list):.4f}"
         )
+        # regular save
         if epoch % args.save_interval == 0:
             ckpt_dir = osp.join(args.save_dir, f"epoch_{epoch}")
             logging.info(f"Saving model to {ckpt_dir}.")
             accelerator.save_state(ckpt_dir)
+        # best save
+        if (avg_test_loss := np.mean(test_loss_list)) < best_loss:
+            best_loss = avg_test_loss
+            best_epoch = epoch
+            best_dir = osp.join(args.save_dir, "best")
+            logging.info(f"Saving best model to {args.save_dir} at Epoch {epoch}.")
+            accelerator.save_state(best_dir)
+        else:
+            logging.info(f"Best model is still at Epoch {best_epoch}.")
+
+    # indicate best model epoch
+    with open(osp.join(args.save_dir, "best_epoch.txt"), "w") as fp:
+        fp.write(f"{best_epoch}\n")
+
     # create soft link to last checkpoint
     logging.info("Creating soft link to last checkpoint.")
     last_checkpoint_dir = osp.join(args.save_dir, f"epoch_{args.epoch}")
