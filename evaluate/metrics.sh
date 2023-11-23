@@ -9,7 +9,7 @@ filepath="../datasets/imdb/SAAC/TODO.csv"
 savedir="../tmp_saves/results/imdb/full/TODO"
 train_savedir="../tmp_saves/gpt2/TODO"
 
-baseline_modeldir="../tmp_saves/gpt2/imdb/ckpt"
+baseline_modeldir="../tmp_saves/gpt2/imdb/best"
 baseline_filepath="../datasets/imdb/imdb.csv"
 # --------------------------------------
 
@@ -46,5 +46,5 @@ python GPT/jsd.py $baseline_filepath \
     --force \
     -o $savedir/$filename_no_ext/jsd.json \
     --model-dir1 $baseline_modeldir \
-    --model-dir2 $train_savedir/$filename_no_ext/ckpt
+    --model-dir2 $train_savedir/$filename_no_ext/best
 echo ""

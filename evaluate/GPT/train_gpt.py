@@ -4,6 +4,8 @@ import os
 import os.path as osp
 from functools import partial
 
+from functional import seq
+
 TMP_SAVES_DIR = f"{osp.dirname(__file__)}/../../tmp_saves"
 
 os.environ["HF_HOME"] = f"{TMP_SAVES_DIR}/hg_cache"
@@ -17,7 +19,7 @@ from transformers import (
     TrainingArguments,
 )
 
-from datasets import Dataset, load_dataset
+from datasets import DatasetDict, load_dataset
 
 
 def parse_args():
@@ -48,6 +50,7 @@ def parse_args():
     #    Dataset Args    #
     #                    #
     ######################
+    parser.add_argument("--train-ratio", type=float, default=0.85, help="Train ratio.")
     parser.add_argument("--seed", type=int, default=42, help="Random seed.")
     #######################
     #                     #
@@ -74,14 +77,17 @@ def parse_args():
     return args
 
 
-def gen_dataset(input_path: str, data_col: str) -> Dataset:
+def gen_dataset(
+    input_path: str, data_col: str, seed: int, train_ratio: float = 0.85
+) -> DatasetDict:
     """Generate a dataset from the input file."""
+    assert 0 <= train_ratio <= 1, f"train_ratio must be in [0, 1], got {train_ratio}."
     dataset = load_dataset("csv", data_files=input_path, split="train")
     dataset = dataset.select_columns(data_col)
     dataset = dataset.rename_column(data_col, "text")
     # Train-test split
-    # datasets = datasets.train_test_split(test_size=0.1, shuffle=True, seed=seed)
-    return dataset
+    datasets = dataset.train_test_split(test_size=1 - train_ratio, shuffle=True, seed=seed)
+    return datasets
 
 
 def tokenize(examples, tokenizer: GPT2Tokenizer, max_token_len: int):
@@ -96,14 +102,16 @@ if __name__ == "__main__":
     args = parse_args()
     dataset_name: str = osp.splitext(osp.basename(args.input))[0]
     # load dataset
-    dataset = gen_dataset(args.input, args.data_col)
+    datasets: DatasetDict = gen_dataset(
+        args.input, args.data_col, seed=args.seed, train_ratio=args.train_ratio
+    )
     # load model
     model_name = "gpt2-medium"
     tokenizer = GPT2Tokenizer.from_pretrained(model_name)
     tokenizer.pad_token = tokenizer.eos_token
     model = GPT2LMHeadModel.from_pretrained(model_name)
     # tokenize data
-    tokenized_dataset = dataset.map(
+    tokenized_datasets = datasets.map(
         partial(tokenize, tokenizer=tokenizer, max_token_len=args.max_token_length),
         batched=True,
         remove_columns=["text"],
@@ -113,7 +121,7 @@ if __name__ == "__main__":
         output_dir=args.save_dir,
         per_device_train_batch_size=16,
         per_device_eval_batch_size=16,
-        evaluation_strategy="no",
+        evaluation_strategy="epoch",
         logging_strategy="epoch",
         num_train_epochs=args.epoch,
         weight_decay=1e-3,
@@ -121,9 +129,10 @@ if __name__ == "__main__":
         lr_scheduler_type=SchedulerType.CONSTANT_WITH_WARMUP,
         learning_rate=args.lr,
         save_strategy="epoch",
-        save_total_limit=2,
+        save_total_limit=1,
         fp16=True,
         seed=args.seed,
+        load_best_model_at_end=True,
     )
     data_collator = DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm=False)
 
@@ -137,12 +146,25 @@ if __name__ == "__main__":
         tokenizer=tokenizer,
         args=train_args,
         data_collator=data_collator,
-        train_dataset=tokenized_dataset,
+        train_dataset=tokenized_datasets["train"],
+        eval_dataset=tokenized_datasets["test"],
     )
 
     trainer.train()
 
     # create soft link to last save
-    steps_per_epoch = len(tokenized_dataset) // train_args.per_device_train_batch_size
-    ckpt_name = f"checkpoint-{args.epoch * steps_per_epoch}"
-    os.symlink(ckpt_name, osp.realpath(f"{args.save_dir}/ckpt"))
+    cur_ckpt_dir_list: list[int] = (
+        seq(os.listdir(args.save_dir))
+        .map(lambda x: osp.join(args.save_dir, x))
+        .filter(osp.isdir)
+        .map(osp.basename)
+        .filter(lambda x: x.startswith("checkpoint-"))
+        .map(lambda x: int(x.removeprefix("checkpoint-")))
+        .to_list()
+    )
+    ckpt_name = f"checkpoint-{min(cur_ckpt_dir_list)}"
+    new_link_path = osp.join(args.save_dir, "best")
+    print(f"Creating soft link {new_link_path} -> {ckpt_name}")
+    if osp.exists(new_link_path):
+        os.remove(new_link_path)
+    os.symlink(ckpt_name, new_link_path, target_is_directory=True)

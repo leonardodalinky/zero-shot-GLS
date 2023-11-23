@@ -10,13 +10,13 @@ import numpy as np
 import torch
 from torch.utils.data import DataLoader
 from tqdm import tqdm
-from train_gpt import gen_dataset
 
 os.environ["HF_HOME"] = f"{osp.dirname(__file__)}/../../tmp_saves/hg_cache"
 sys.path.append(f"{osp.dirname(osp.abspath(__file__))}/../../src")
 
 from transformers import GPT2LMHeadModel, GPT2Tokenizer
 
+from datasets import Dataset, load_dataset
 from p_utils import seed_everything
 
 
@@ -94,6 +94,14 @@ def parse_args():
     ), f"{args.output} already exists. Use --force to overwrite."
 
     return args
+
+
+def gen_dataset(input_path: str, data_col: str) -> Dataset:
+    """Generate a dataset from the input file."""
+    dataset = load_dataset("csv", data_files=input_path, split="train")
+    dataset = dataset.select_columns(data_col)
+    dataset = dataset.rename_column(data_col, "text")
+    return dataset
 
 
 def kl(input: torch.Tensor, log_target: torch.Tensor) -> torch.Tensor:
