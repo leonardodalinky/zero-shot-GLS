@@ -163,7 +163,7 @@ def prepare_start(
 
     # logits: (1, 1, V)
     logits, G_hidden = model.generator(G_inp, z, G_hidden)
-    sorted_logits_indices = torch.argsort(logits, descending=True)
+    sorted_logits_indices = torch.argsort(logits[0, 0], descending=True)
     # randomly sample one token from the first 1000
     sorted_logits_indices = sorted_logits_indices[:1000]
     rand_idx = torch.randint(0, len(sorted_logits_indices), (1,))
@@ -208,6 +208,7 @@ def encrypt(
         for _ in range(max_new_tokens):
             # TODO: VAE infer
             logits, G_hidden = model.generator(input_ids, z, G_hidden)
+            logits = logits[0, -1]  # (V,)
             logits = logits.double()
             logits[tokenizer.cls_token_id] = -10
             logits[tokenizer.sep_token_id] = -10
@@ -295,10 +296,11 @@ if __name__ == "__main__":
     os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
     torch.use_deterministic_algorithms(True, warn_only=True)
 
-    tokenizer = tr.AutoTokenizer.from_pretrained("facebook/opt-125m")
+    tokenizer = tr.AutoTokenizer.from_pretrained("distilbert-base-uncased")
     model: VAE = VAE(
         n_layer=args.num_layers,
         n_z=args.num_z,
+        load_pretrained=False,
     )
     accelerator = accelerate.Accelerator(mixed_precision="fp16")
     model = model.to(accelerator.device)

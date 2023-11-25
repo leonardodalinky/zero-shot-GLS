@@ -6,10 +6,14 @@ import transformers as tr
 
 
 class Encoder(nn.Module):
-    def __init__(self):
+    def __init__(self, load_pretrained: bool = True):
         super().__init__()
         # distilbert
-        self.bert = tr.AutoModel.from_pretrained("distilbert-base-uncased")
+        if load_pretrained:
+            self.bert = tr.AutoModel.from_pretrained("distilbert-base-uncased")
+        else:
+            config = tr.DistilBertConfig.from_pretrained("distilbert-base-uncased")
+            self.bert = tr.DistilBertModel(config)
 
     def forward(self, input_ids: torch.Tensor, attention_mask: torch.Tensor):
         # input_ids: (B, S)
@@ -83,9 +87,9 @@ class Generator(nn.Module):
 
 
 class VAE(nn.Module):
-    def __init__(self, n_layer: int = 2, n_z: int = 128):
+    def __init__(self, n_layer: int = 2, n_z: int = 128, load_pretrained: bool = True):
         super().__init__()
-        self.encoder = Encoder()
+        self.encoder = Encoder(load_pretrained=load_pretrained)
         self.hidden_to_mu = nn.Linear(self.encoder.hidden_size, n_z)
         self.hidden_to_logvar = nn.Linear(self.encoder.hidden_size, n_z)
         self.generator = Generator(

@@ -277,12 +277,10 @@ def main():
 
     # sample pairs
     logging.info(f"Sampling {args.pairs} pairs.")
-    sampled1 = random.sample(data1, args.pairs)
-    sampled2 = random.sample(data2, args.pairs)
-    assert len(sampled1) == len(sampled2)
-    ## pairs: (text1, text2, need_swap)
     pairs: list[tuple[str, str, bool, int, str, int]] = []
-    for idx, (text1, text2) in enumerate(zip(sampled1, sampled2)):
+    for idx in range(args.pairs):
+        text1 = random.sample(data1, 1)[0]
+        text2 = random.sample(data2, 1)[0]
         need_swap = random.random() < 0.5
         pairs.append((text1, text2, need_swap, idx, args.mode, args.timeout))
 
@@ -332,7 +330,10 @@ def main():
     with output_path.open("w") as f:
         json.dump(
             {
-                "all_cnt": len(output_pairs),
+                "input1": args.input1,
+                "input2": args.input2,
+                "mode": args.mode,
+                "all_cnt": len(pairs),
                 "valid_cnt": valid_result_cnt,
                 "true_cnt": true_result_cnt,
                 "true_ratio": true_result_cnt / valid_result_cnt,

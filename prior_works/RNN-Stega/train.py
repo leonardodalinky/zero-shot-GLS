@@ -163,11 +163,11 @@ def main():
     #                #
     ##################
     logging.info("Start training. Good luck!")
+    best_loss = np.inf
+    best_epoch = 0
     for epoch in tqdm(range(1, args.epoch + 1), desc="Epoch"):
         train_loss_list: list[float] = []
         test_loss_list: list[float] = []
-        best_loss = np.inf
-        best_epoch = 0
         #####################
         #                   #
         #    train phase    #
@@ -238,12 +238,10 @@ def main():
 
     # create soft link to last checkpoint
     logging.info("Creating soft link to last checkpoint.")
-    last_checkpoint_dir = osp.join(args.save_dir, f"epoch_{args.epoch}")
-    last_checkpoint_dir = osp.realpath(last_checkpoint_dir)
     softlink_dir = osp.join(args.save_dir, "ckpt")
     if osp.exists(softlink_dir):
         os.remove(softlink_dir)
-    os.symlink(last_checkpoint_dir, softlink_dir)
+    os.symlink(f"epoch_{args.epoch}", softlink_dir)
 
     logging.info("Done.")
 
