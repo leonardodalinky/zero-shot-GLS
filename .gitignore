@@ -170,3 +170,4 @@ datasets/*
 !datasets/*.md
 !datasets/*_gen.ipynb
 !datasets/half_split.py
+*.csv
