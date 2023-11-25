@@ -126,16 +126,6 @@ def parse_args():
     parser.add_argument("--hidden-dim", type=int, default=768, help="Hidden dimension.")
     parser.add_argument("--num-layers", type=int, default=2, help="Number of layers.")
     parser.add_argument("--dropout", type=float, default=0.5, help="Dropout rate.")
-    ################
-    #              #
-    #    params    #
-    #              #
-    ################
-    parser.add_argument(
-        "--max-bpw",
-        type=int,
-        default=3,
-    )
     ####################
     #                  #
     #    validating    #
@@ -217,7 +207,6 @@ def encrypt(
     tokenizer: tr.AutoTokenizer,
     bs_base64: str,
     seed: int,
-    max_bpw: int,
     sentence_id: int | None = None,
     max_new_tokens: int = 160,
 ) -> tuple[str, float, int]:
@@ -283,9 +272,12 @@ def encrypt(
                 bit_tmp += bit
 
             # terminate
-            gen = int(indices[int(torch.multinomial(probs, 1))])
-            nll_list.append(-math.log2(probs[gen].item()))
-            input_ids = torch.cat([input_ids, torch.LongTensor([[gen]], device=device)], dim=1)
+            _gen = int(torch.multinomial(probs, 1))
+            gen = int(indices[_gen])
+            nll_list.append(-math.log2(probs[_gen].item()))
+            input_ids = torch.cat(
+                [input_ids, torch.tensor([[gen]], dtype=torch.long, device=device)], dim=1
+            )
             bit_index += bit_tmp
             if bit_index >= len(bit_stream):
                 break
@@ -388,7 +380,6 @@ if __name__ == "__main__":
                 bs_base64=row[args.src_col],
                 seed=seed,
                 sentence_id=row.get("sentence_id"),
-                max_bpw=args.max_bpw,
                 max_new_tokens=args.max_new_tokens,
             )
             # remove all newlines
