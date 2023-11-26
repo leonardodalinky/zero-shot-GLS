@@ -225,6 +225,7 @@ def encrypt(
             logits[tokenizer.eos_token_id] = -10
             logits[tokenizer.pad_token_id] = -10
             probs = F.softmax(logits, dim=-1)  # (V,)
+            original_probs = probs.clone()
             probs, indices = probs.sort(descending=True)
             # start recursion
             bit_tmp = 0
@@ -272,9 +273,8 @@ def encrypt(
                 bit_tmp += bit
 
             # terminate
-            _gen = int(torch.multinomial(probs, 1))
-            gen = int(indices[_gen])
-            nll_list.append(-math.log2(probs[_gen].item()))
+            gen = int(indices[int(torch.multinomial(probs, 1))])
+            nll_list.append(-math.log2(original_probs[gen].item()))
             input_ids = torch.cat(
                 [input_ids, torch.tensor([[gen]], dtype=torch.long, device=device)], dim=1
             )

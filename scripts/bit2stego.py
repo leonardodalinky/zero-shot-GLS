@@ -142,7 +142,7 @@ def parse_args():
     parser.add_argument(
         "--egs-mode",
         type=str,
-        default="block",
+        default="huffman",
         choices=hide_extract.MODE,
         help="Mode of EGS.",
     )

@@ -14,9 +14,9 @@ from tqdm import tqdm
 os.environ["HF_HOME"] = f"{osp.dirname(__file__)}/../../tmp_saves/hg_cache"
 sys.path.append(f"{osp.dirname(osp.abspath(__file__))}/../../src")
 
+from train_gpt import gen_dataset
 from transformers import GPT2LMHeadModel, GPT2Tokenizer
 
-from datasets import Dataset, load_dataset
 from p_utils import seed_everything
 
 
@@ -68,6 +68,7 @@ def parse_args():
     #                    #
     ######################
     parser.add_argument("--seed", type=int, default=42, help="Random seed.")
+    parser.add_argument("--train-ratio", type=float, default=0.85, help="Train ratio.")
     parser.add_argument("--n-rows", type=int, default=10_000, help="Number of rows to load.")
     parser.add_argument(
         "--max-token-length",
@@ -96,12 +97,12 @@ def parse_args():
     return args
 
 
-def gen_dataset(input_path: str, data_col: str) -> Dataset:
-    """Generate a dataset from the input file."""
-    dataset = load_dataset("csv", data_files=input_path, split="train")
-    dataset = dataset.select_columns(data_col)
-    dataset = dataset.rename_column(data_col, "text")
-    return dataset
+# def gen_dataset(input_path: str, data_col: str) -> Dataset:
+#     """Generate a dataset from the input file."""
+#     dataset = load_dataset("csv", data_files=input_path, split="train")
+#     dataset = dataset.select_columns(data_col)
+#     dataset = dataset.rename_column(data_col, "text")
+#     return dataset
 
 
 def kl(input: torch.Tensor, log_target: torch.Tensor) -> torch.Tensor:
@@ -157,14 +158,9 @@ if __name__ == "__main__":
     #                 #
     ###################
     logging.info(f"Loading input data: {args.input}.")
-    dataset = gen_dataset(args.input, args.data_col)
-    sampled_indices = np.random.choice(
-        len(dataset),
-        size=args.n_rows,
-        replace=False,
-    )
+    datasets = gen_dataset(args.input, args.data_col, seed=args.seed, train_ratio=args.train_ratio)
     test_dataloader = DataLoader(
-        dataset.select(sampled_indices),
+        datasets["test"],
         batch_size=args.batch_size,
         shuffle=False,
         num_workers=4,
@@ -196,9 +192,17 @@ if __name__ == "__main__":
     logging.info(f"Compute metrics. Output file: {args.output}.")
     jsd_list: list[float] = []
     with torch.no_grad():
-        for row in tqdm(test_dataloader, desc="JSD", dynamic_ncols=True):
+        for idx, row in tqdm(
+            enumerate(test_dataloader),
+            desc="JSD",
+            total=min(len(test_dataloader), args.n_rows // args.batch_size),
+            dynamic_ncols=True,
+        ):
             jsds = jensen(model1, model2, tokenizer, row["text"], args.max_token_length)
             jsd_list.extend(jsds)
+            if (idx + 1) * args.batch_size >= args.n_rows:
+                # stop when we have enough rows
+                break
 
     jsd_mean = np.mean(jsd_list)
     print("jsd_mean:", jsd_mean)
