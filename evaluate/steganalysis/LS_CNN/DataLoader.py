@@ -12,9 +12,7 @@ class MyData(data.Dataset):
     def sort_ket(ex):
         return len(ex.text)
 
-    def __init__(
-        self, text_field, label_field, cover_path=None, stego_path=None, examples=None, **kwargs
-    ):
+    def __init__(self, text_field, label_field, cover=None, stego=None, examples=None, **kwargs):
         """Create an Myself_dataset instance given a path and fields
 
         Arguments:
@@ -55,9 +53,9 @@ class MyData(data.Dataset):
 
         if examples is None:
             examples = []
-            examples += [data.Example.fromlist([line, "negative"], fields) for line in cover_path]
+            examples += [data.Example.fromlist([line, "negative"], fields) for line in cover]
 
-            examples += [data.Example.fromlist([line, "positive"], fields) for line in stego_path]
+            examples += [data.Example.fromlist([line, "positive"], fields) for line in stego]
 
             # with open(cover_path, 'r', errors='ignore') as f:
             # 	examples += [data.Example.fromlist([line, 'negative'], \
@@ -71,32 +69,42 @@ class MyData(data.Dataset):
 
     @classmethod
     def split(cls, text_field, label_field, args, state, shuffle=True, **kwargs):
-        path = Path(args.csv_dir)
-        df = pd.read_csv(path, usecols=["plaintext", "stegotext"])
+        gt_path = Path(args.gt_path)
+        generated_path = Path(args.gen_path)
+
+        # randomly select 4000 record from imdb.csv
+        # total_rows = sum(1 for line in open(gt_path)) - 1
+        sample_size = 4000
+        # skips = sorted(random.sample(range(1, 1 + sample_size), total_rows - sample_size))
+
+        gt = pd.read_csv(gt_path)["plaintext"].tolist()
+        random.seed(2024)
+        gt = random.sample(gt, sample_size)
+
+        # read 4000 generated text
+        df = pd.read_csv(generated_path)["stegotext"].tolist()
+
+        # Split
         train_cover, test_cover, train_stego, test_stego = ms.train_test_split(
-            df["plaintext"], df["stegotext"], test_size=0.25, random_state=7
+            gt, df, test_size=0.25, random_state=2024
         )
 
-        if state is "train":
+        if state == "train":
             print("loading the training data...")
             # cover_path = args.train_cover_dir
             # stego_path = args.train_stego_dir
-            examples = cls(
-                text_field, label_field, cover_path=train_cover, stego_path=train_stego
-            ).examples
+            examples = cls(text_field, label_field, cover=train_cover, stego=train_stego).examples
             if shuffle:
                 random.shuffle(examples)
-            val_idx = -2000
+            val_idx = -500
             return (
                 cls(text_field, label_field, examples=examples[:val_idx]),
                 cls(text_field, label_field, examples=examples[val_idx:]),
             )
 
-        if state is "test":
+        if state == "test":
             print("loading the testing data...")
             # cover_path = args.test_cover_dir
             # stego_path = args.test_stego_dir
-            examples = cls(
-                text_field, label_field, cover_path=test_cover, stego_path=test_stego
-            ).examples
+            examples = cls(text_field, label_field, cover=test_cover, stego=test_stego).examples
             return cls(text_field, label_field, examples=examples)

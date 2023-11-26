@@ -1,11 +1,13 @@
 import os
 import sys
+from copy import deepcopy
 
 import numpy as np
 import torch
 import torch.autograd as autograd
 import torch.nn.functional as F
-from tensorboardX import SummaryWriter
+
+# from tensorboardX import SummaryWriter
 
 
 def train(train_iter, dev_iter, model, args):
@@ -15,11 +17,11 @@ def train(train_iter, dev_iter, model, args):
     optimizer = torch.optim.Adam(
         filter(lambda p: p.requires_grad, model.parameters()), args.lr, weight_decay=1e-6
     )
-    log_dir = os.path.join(args.save_dir, "LogFile")
-    writer = SummaryWriter(log_dir=log_dir)
-    steps = 0
+    # log_dir = os.path.join(args.save_dir, "LogFile")
+    # writer = SummaryWriter(log_dir=log_dir)
+    # steps = 0
     best_acc = 0
-    last_step = 0
+    last_epoch = 0
     model.train()
 
     for epoch in range(1, args.epochs + 1):
@@ -41,37 +43,39 @@ def train(train_iter, dev_iter, model, args):
             loss.backward()
             optimizer.step()
 
-            steps += 1
-            if steps % args.log_interval == 0:
-                corrects = (torch.max(logit, 1)[1].view(target.size()).data == target.data).sum()
-                accuracy = corrects.item() / batch.batch_size
-                sys.stdout.write(
-                    "\rBatch[{}] - loss:{:.6f} acc:{:.4f}({}/{})".format(
-                        steps, loss.item(), accuracy, corrects, batch.batch_size
-                    )
+        if epoch % args.log_interval == 0:
+            corrects = (torch.max(logit, 1)[1].view(target.size()).data == target.data).sum()
+            accuracy = corrects.item() / batch.batch_size
+            sys.stdout.write(
+                "\rEpoch[{}] - loss:{:.6f} acc:{:.4f}({}/{})".format(
+                    epoch, loss.item(), accuracy, corrects, batch.batch_size
                 )
-                writer.add_scalar("loss/train", loss.item(), steps)
-                writer.add_scalar("acc/train", accuracy, steps)
+            )
+            # writer.add_scalar("loss/train", loss.item(), steps)
+            # writer.add_scalar("acc/train", accuracy, steps)
 
-            if steps % args.test_interval == 0:
-                dev_acc, dev_loss = data_eval(dev_iter, model, args)
-                writer.add_scalar("loss/dev", dev_loss, steps)
-                writer.add_scalar("acc/dev", dev_acc, steps)
-                if dev_acc > best_acc:
-                    best_acc = dev_acc
-                    last_step = steps
-                    if args.save_best:
-                        save(model, args.save_dir, "best", steps)
-                if epoch > 10 and dev_loss > 0.7:
-                    print("\nthe validation is {}, training done...".format(dev_loss))
-                    sys.exit(0)
-                else:
-                    if steps - last_step >= args.early_stop:
-                        print("early stop by {} steps.".format(args.early_stop))
-                model.train()
+        if epoch % args.test_interval == 0:
+            dev_acc, dev_loss = data_eval(dev_iter, model, args)
+            # writer.add_scalar("loss/dev", dev_loss, steps)
+            # writer.add_scalar("acc/dev", dev_acc, steps)
+            if dev_acc > best_acc:
+                best_acc = dev_acc
+                last_epoch = epoch
+                if args.save_best:
+                    save(model, args.save_dir, "best", epoch)
+                    # best_model = model.deepcopy()
+            if epoch > 10 and dev_loss > 0.7:
+                print("\nthe validation is {}, training done...".format(dev_loss))
+                sys.exit(0)
+            # else:
+            #     if epoch - last_epoch >= args.early_stop:
+            #         print("early stop by {} epochs.".format(args.early_stop))
+            model.train()
 
-            elif steps % args.save_interval == 0:
-                save(model, args.log_dir, "snapshot", steps)
+        # if epoch % args.save_interval == 0:
+        save(model, args.save_dir, "last", epoch)
+        # best
+        # return best_model
 
 
 def data_eval(data_iter, model, args):
@@ -127,7 +131,7 @@ def data_eval(data_iter, model, args):
         FP = sum((predictions == 1) & (labels == 0))
         print("\nTesting - loss:{:.6f} acc:{:.4f}({}/{})".format(loss, accuracy, corrects, size))
         result_file = os.path.join(args.save_dir, "result.txt")
-        with open(result_file, "a", errors="ignore") as f:
+        with open(result_file, "w", errors="ignore") as f:
             f.write("The testing accuracy: {:.4f} \n".format(accuracy))
             f.write("The testing precious: {:.4f} \n".format(precious))
             f.write("The testing recall: {:.4f} \n".format(recall))
@@ -136,12 +140,12 @@ def data_eval(data_iter, model, args):
             f.write("The testing TP: {} \n".format(TP))
             f.write("The testing FN: {} \n".format(FN))
             f.write("The testing FP: {} \n\n".format(FP))
-        # return accuracy, recall, precious, F1_score
+        return accuracy, recall, precious, F1_score
 
 
-def save(model, save_dir, save_prefix, steps):
+def save(model, save_dir, save_prefix, epochs):
     if not os.path.isdir(save_dir):
         os.makedirs(save_dir)
     save_prefix = os.path.join(save_dir, save_prefix)
-    save_path = "{}_steps_{}.pt".format(save_prefix, steps)
+    save_path = "{}_epochs.pt".format(save_prefix)
     torch.save(model.state_dict(), save_path)
