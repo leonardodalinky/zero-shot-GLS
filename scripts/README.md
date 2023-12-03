@@ -7,8 +7,6 @@ First, download all models.
 python download_models.py
 ```
 
-P.S.: If you set `tmp_saves/` correctly, you can skip this step.
-
 ## Stages
 
 * stage1 (s1,  encode): Plaintext to enc_bits.
@@ -18,10 +16,8 @@ P.S.: If you set `tmp_saves/` correctly, you can skip this step.
 
 ## Stego modes
 
-For now, we have 3 modes:
+For now, we have only one mode:
 * `--mode=cover`: mimic the cover text.
-* TODO
-* TODO
 
 ## Corpus Hints
 

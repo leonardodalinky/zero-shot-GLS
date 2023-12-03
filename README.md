@@ -19,15 +19,23 @@ pip install external_tools/zgls-utils
 ```shell
 pre-commit install
 ```
-4. Create a temp folder in HDD for storing and sharing files:
+4. Create a temp folder in HDD for storing and sharing files, for example:
 ```shell
-# In our server only.
-mkdir -p /media/data1/share/zgls
-ln -s /media/data1/share/zgls tmp_saves
-ln -s /media/data1/share/zgls/datasets/imdb datasets/imdb
-ln -s /media/data1/share/zgls/datasets/twitter datasets/twitter
+# DO NOT copy directly!
+mkdir -p $SHARE_FOLDER/zgls
+ln -s $SHARE_FOLDER/zgls tmp_saves
+ln -s $SHARE_FOLDER/datasets/imdb datasets/imdb
+ln -s $SHARE_FOLDER/datasets/twitter datasets/twitter
 ```
 
 ## Datasets
 
-Check [Dataset](datasets/README.md) section for details.
+Check [datasets/](datasets/README.md) section for details.
+
+## Usage
+
+See [scripts/](scripts/README.md) section for details.
+
+## Evaluation
+
+For details of metrics, steganalysis, and language evaluation, check [evaluate/](evaluate/README.md) section.
