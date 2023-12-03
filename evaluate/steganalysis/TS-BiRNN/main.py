@@ -65,7 +65,7 @@ parser.add_argument(
 parser.add_argument(
     "-gt-path",
     type=str,
-    default="/home/lyy/workspace/zero-shot-GLS/datasets/imdb/imdb.csv",
+    default="zero-shot-GLS/datasets/imdb/imdb.csv",
     help="The path of imdb data.",
 )
 # model
