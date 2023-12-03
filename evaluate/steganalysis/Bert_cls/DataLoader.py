@@ -1,11 +1,10 @@
-import os
 import random
 from pathlib import Path
 
 import pandas
 import sklearn.model_selection as ms
 import torch
-from torch.utils.data import DataLoader, Dataset
+from torch.utils.data import Dataset
 from transformers import BertTokenizer
 
 

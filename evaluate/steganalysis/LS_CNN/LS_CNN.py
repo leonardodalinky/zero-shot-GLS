@@ -1,10 +1,6 @@
-# import sys
-# import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-
-# from torch.nn import Parameter
 
 
 class LS_CNN(nn.Module):

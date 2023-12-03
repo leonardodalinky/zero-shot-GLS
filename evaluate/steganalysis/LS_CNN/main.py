@@ -1,7 +1,5 @@
 import argparse
-import datetime
 import os
-import sys
 
 import DataLoader
 import LS_CNN
