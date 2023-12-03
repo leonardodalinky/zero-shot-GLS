@@ -127,11 +127,9 @@ def data_loader(text_field, label_field, args, **kwargs):
 
 # load data
 print("\nLoading data...")
-text_field = data.Field(lower=True)
+text_field = data.Field(lower=True, fix_length=40)
 label_field = data.Field(sequential=False)
 train_iter, valid_iter = data_loader(text_field, label_field, args, device=args.device, sort=False)
-
-print(len(text_field.vocab))
 
 if args.test:
     test_data = DataLoader.MyData.split(text_field, label_field, args, "test")
@@ -139,7 +137,7 @@ if args.test:
         0
     ]
 
-print(len(text_field.vocab))
+# print(len(text_field.vocab))
 
 # update args and print
 args.embed_num = len(text_field.vocab)
@@ -217,6 +215,8 @@ else:
     P = p
     F1 = f
 
+    if not os.path.exists(args.save_dir):
+        os.makedirs(args.save_dir)
     with open(os.path.join(args.save_dir, "result.txt"), "a") as f:
         f.write("The average testing accuracy: {:.4f} \n".format(ACC))
         f.write("The average testing recall: {:.4f} \n".format(R))

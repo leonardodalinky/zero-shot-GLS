@@ -19,29 +19,29 @@ parser.add_argument(
 parser.add_argument("-lr", type=float, default=0.001, help="initial learning rate [default:0.001]")
 parser.add_argument("-epochs", type=int, default=20, help="number of epochs for train [default:20]")
 parser.add_argument(
-    "-log-interval", type=int, default=20, help="how many steps to wait defore logging train status"
+    "-log-interval", type=int, default=1, help="how many epochs to wait defore logging train status"
 )
 parser.add_argument(
     "-test-interval",
     type=int,
-    default=100,
-    help="how many steps to wait defore testing [default:100]",
+    default=1,
+    help="how many epochs to wait defore testing [default:100]",
 )
 parser.add_argument(
     "-save-interval",
     type=int,
-    default=500,
-    help="how many steps to wait defore saving [default:500]",
+    default=5,
+    help="how many epochs to wait before saving [default:500]",
 )
-parser.add_argument(
-    "-early-stop", type=int, default=1000, help="iteration numbers to stop without performace boost"
-)
+# parser.add_argument(
+#     "-early-stop", type=int, default=1000, help="iteration numbers to stop without performace boost"
+# )
 parser.add_argument(
     "-save-best", type=bool, default=True, help="whether to save when get best performance"
 )
-parser.add_argument("-save-dir", type=str, default="snapshot", help="where to save the snapshot")
-parser.add_argument("-load-dir", type=str, default=None, help="where to save the trained model")
-
+parser.add_argument("-save-dir", type=str, help="where to save the snapshot")
+parser.add_argument("-save-ckp", default=None, type=str, help="where to save the snapshot")
+parser.add_argument("-load-dir", type=str, default=None, help="where to loading the trained model")
 # data
 parser.add_argument(
     "-shuffle",
@@ -58,10 +58,15 @@ parser.add_argument(
 # parser.add_argument('-test-stego-dir', type=str, default='1bpw.txt',
 # 					help='the path of test stego data. [default:1bpw.txt]')
 parser.add_argument(
-    "-csv-dir",
+    "-gen-path",
     type=str,
-    default="../imdb_s2_c2_t0.010_b5.csv",
-    help="the path of imdb data. [default:imdb_s2_c2_t0.010_b5.csv]",
+    help="The path of generated imdb data.",
+)
+parser.add_argument(
+    "-gt-path",
+    type=str,
+    default="/home/lyy/workspace/zero-shot-GLS/datasets/imdb/imdb.csv",
+    help="The path of imdb data.",
 )
 # model
 parser.add_argument(
@@ -89,8 +94,9 @@ parser.add_argument(
 )
 
 # option
-parser.add_argument("-test", type=bool, default=False, help="train or test [default:False]")
-
+parser.add_argument(
+    "-test", default=False, help="train or test [default:False]", action="store_true"
+)
 args = parser.parse_args()
 
 os.environ["CUDA_VISIBLE_DEVICES"] = args.idx_gpu
@@ -109,7 +115,7 @@ def data_loader(text_field, label_field, args, **kwargs):
 
 # load data
 print("\nLoading data...")
-text_field = data.Field(lower=True)
+text_field = data.Field(lower=True, fix_length=40)
 label_field = data.Field(sequential=False)
 train_iter, valid_iter = data_loader(text_field, label_field, args, device=args.device, sort=False)
 
@@ -160,35 +166,40 @@ if args.cuda:
 
 # training phase
 if not args.test:
+    print("\n----------training------------")
     train.train(train_iter, valid_iter, model, args)
-
 
 # testing phase
 else:
     print("\n----------testing------------")
-    print("Loading test model from {}...".format(args.save_dir))
+    print("Loading test model from {}...".format(args.save_ckp))
     models = []
-    files = sorted(os.listdir(args.save_dir))
-    for name in files:
-        if name.endswith(".pt"):
-            models.append(name)
-
-    model_steps = sorted([int(m.split("_")[-1].split(".")[0]) for m in models])
+    # files = sorted(os.listdir(args.save_ckp))
+    file = args.save_ckp
+    model.load_state_dict(torch.load(file))
+    # train.data_eval(test_iter, model, args)
+    acc, r, p, f = train.data_eval(test_iter, model, args)
+    # for name in files:
+    #     if name.endswith(".pt"):
+    #         models.append(name)
+    # model_steps = sorted([int(m.split("_")[-1].split(".")[0]) for m in models])
     # ACC, R, P, F1 = 0, 0, 0, 0
-    for step in model_steps[-3:]:
-        best_model = "best_steps_{}.pt".format(step)
-        m_path = os.path.join(args.save_dir, best_model)
-        print("the {} model is loaded...".format(m_path))
-        model.load_state_dict(torch.load(m_path))
-        # acc, r, p, f = train.data_eval(test_iter, model, args)
-        train.data_eval(test_iter, model, args)
-        # ACC += acc
-        # R += r
-        # P += p
-        # F1 += f
+    # for step in model_steps[-3:]:
+    # best_model = "best_steps_{}.pt".format(step)
+    # m_path = os.path.join(args.save_dir, best_model)
+    # print("the {} model is loaded...".format(m_path))
+    # model.load_state_dict(torch.load(m_path))
+    # acc, r, p, f = train.data_eval(test_iter, model, args)
+    # train.data_eval(test_iter, model, args)
+    ACC = acc
+    R = r
+    P = p
+    F1 = f
 
-    # with open(os.path.join(args.save_dir, 'result.txt'), 'a') as f:
-    # 	f.write('The average testing accuracy: {:.4f} \n'.format(ACC/3))
-    # 	f.write('The average testing recall: {:.4f} \n'.format(R/3))
-    # 	f.write('The average testing precious: {:.4f} \n'.format(P/3))
-    # 	f.write('The average testing F1_sorce: {:.4f} \n'.format(F1/3))
+    if not os.path.exists(args.save_dir):
+        os.makedirs(args.save_dir)
+    with open(os.path.join(args.save_dir, "result.txt"), "a") as f:
+        f.write("The average testing accuracy: {:.4f} \n".format(ACC))
+        f.write("The average testing recall: {:.4f} \n".format(R))
+        f.write("The average testing precious: {:.4f} \n".format(P))
+        f.write("The average testing F1_sorce: {:.4f} \n".format(F1))

@@ -4,10 +4,7 @@ from copy import deepcopy
 
 import numpy as np
 import torch
-import torch.autograd as autograd
 import torch.nn.functional as F
-
-# from tensorboardX import SummaryWriter
 
 
 def train(train_iter, dev_iter, model, args):
@@ -130,6 +127,8 @@ def data_eval(data_iter, model, args):
         FN = sum((predictions == 0) & (labels == 1))
         FP = sum((predictions == 1) & (labels == 0))
         print("\nTesting - loss:{:.6f} acc:{:.4f}({}/{})".format(loss, accuracy, corrects, size))
+        if not os.path.exists(args.save_dir):
+            os.makedirs(args.save_dir)
         result_file = os.path.join(args.save_dir, "result.txt")
         with open(result_file, "w", errors="ignore") as f:
             f.write("The testing accuracy: {:.4f} \n".format(accuracy))
@@ -143,8 +142,8 @@ def data_eval(data_iter, model, args):
         return accuracy, recall, precious, F1_score
 
 
-def save(model, save_dir, save_prefix, epochs):
-    if not os.path.isdir(save_dir):
+def save(model, save_dir, save_prefix, epoch):
+    if not os.path.exists(save_dir):
         os.makedirs(save_dir)
     save_prefix = os.path.join(save_dir, save_prefix)
     save_path = "{}_epochs.pt".format(save_prefix)
