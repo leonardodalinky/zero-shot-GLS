@@ -14,6 +14,7 @@ import openai
 import pandas as pd
 import tiktoken
 from func_timeout import FunctionTimedOut, func_timeout
+from openlimit import ChatRateLimiter
 from tqdm import tqdm
 
 # NOTE: change this to change the topic for relevance
@@ -77,6 +78,8 @@ failed_cases = []
 
 USD_PER_GPT35_INPUT_TOKEN = 0.0010 / 1000
 USD_PER_GPT35_OUTPUT_TOKEN = 0.0020 / 1000
+
+rate_limiter = ChatRateLimiter(request_limit=3500, token_limit=80_000)
 
 
 class JSONFormatException(Exception):
@@ -165,7 +168,13 @@ def _judge(pair: tuple[str, str, bool], gen_prompts_func) -> bool:
         messages = gen_prompts_func(sent1, sent2)
     else:
         messages = gen_prompts_func(sent2, sent1)
-    res = openai.chat.completions.create(model="gpt-3.5-turbo", n=1, messages=messages)
+    chat_params = {
+        "model": "gpt-3.5-turbo",
+        "n": 1,
+        "messages": messages,
+    }
+    with rate_limiter.limit(**chat_params):
+        res = openai.chat.completions.create(**chat_params)
     res_json_raw_content: str = res.choices[0].message.content
 
     # token statistics

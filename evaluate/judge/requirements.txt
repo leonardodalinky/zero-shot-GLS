@@ -1,3 +1,4 @@
 func_timeout
 openai>=1.0.0
+openlimit>=0.3.0
 tiktoken
