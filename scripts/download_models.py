@@ -1,5 +1,5 @@
 """
-Download the Llama-2-13B-chat-GPTQ model and tokenizer from HuggingFace.
+Download the models and tokenizers from HuggingFace.
 """
 import os
 import os.path as osp

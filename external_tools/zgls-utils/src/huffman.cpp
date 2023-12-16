@@ -19,5 +19,5 @@ PYBIND11_MODULE(_huffman, m) {
         "pybind11 plugin for huffman encoding"; // optional module docstring
     m.def("huffman_table_from_indices_frequencies",
           &huffman_table_from_indices_frequencies,
-          "A function which adds two numbers");
+          "Build a huffman table from indices frequencies");
 }
