@@ -1,5 +1,10 @@
 # Zero-shot Generative Linguistic Steganography
 
+[![arXiv](https://img.shields.io/badge/arXiv-2403.10856-brightgreen.svg)](https://arxiv.org/abs/2403.10856)
+[![star badge](https://img.shields.io/github/stars/leonardodalinky/zero-shot-GLS?style=social)](https://github.com/leonardodalinky/zero-shot-GLS)
+
+This repo is the official implementation of "Zero-shot Generative Linguistic Steganography".
+
 ## Setup
 
 1. Create Conda environment and install the requirements:
@@ -39,3 +44,7 @@ See [scripts/](scripts/README.md) section for details.
 ## Evaluation
 
 For details of metrics, steganalysis, and language evaluation, check [evaluate/](evaluate/README.md) section.
+
+## Reference
+
+TBD.

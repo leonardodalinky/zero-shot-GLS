@@ -20,7 +20,7 @@ datasets
 └── twitter_gen.ipynb
 ```
 
-The data is available at [Anonymized Google Drive](https://dl.orangedox.com/J6IvQASqoc8Ys8YjBD).
+The data is available at [Google Drive](https://drive.google.com/drive/folders/13FU6pDc5hL07hY-tT6JzA6FBV-c53fcv?usp=sharing).
 
 ## Data format
 

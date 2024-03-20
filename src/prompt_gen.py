@@ -30,13 +30,14 @@ def random_state(seed: int):
     torch.manual_seed(seed)
     torch.cuda.manual_seed(seed)
 
-    yield
-
-    # restore state
-    random.setstate(state["random"])
-    np.random.set_state(state["numpy"])
-    torch.set_rng_state(state["torch"])
-    torch.cuda.set_rng_state(state["torch_cuda"])
+    try:
+        yield
+    finally:
+        # restore state
+        random.setstate(state["random"])
+        np.random.set_state(state["numpy"])
+        torch.set_rng_state(state["torch"])
+        torch.cuda.set_rng_state(state["torch_cuda"])
 
 
 @contextlib.contextmanager
