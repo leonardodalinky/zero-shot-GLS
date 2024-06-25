@@ -4,4 +4,4 @@ pre-commit==3.5.0
 pybind11==2.11.1
 pyfunctional==1.4.3
 # torch==2.1.0+cu121
-transformers==4.34.1
+transformers==4.38.0
