@@ -3,7 +3,7 @@
 [![arXiv](https://img.shields.io/badge/arXiv-2403.10856-brightgreen.svg)](https://arxiv.org/abs/2403.10856)
 [![star badge](https://img.shields.io/github/stars/leonardodalinky/zero-shot-GLS?style=social)](https://github.com/leonardodalinky/zero-shot-GLS)
 
-This repo is the official implementation of "Zero-shot Generative Linguistic Steganography".
+This repo is the official implementation of NAACL'24 paper "[Zero-shot Generative Linguistic Steganography](https://aclanthology.org/2024.naacl-long.289/)".
 
 ## Setup
 
@@ -47,4 +47,23 @@ For details of metrics, steganalysis, and language evaluation, check [evaluate/]
 
 ## Reference
 
-TBD.
+```
+@inproceedings{lin2024zgls,
+    title = "Zero-shot Generative Linguistic Steganography",
+    author = "Lin, Ke  and
+      Luo, Yiyang  and
+      Zhang, Zijian  and
+      Ping, Luo",
+    editor = "Duh, Kevin  and
+      Gomez, Helena  and
+      Bethard, Steven",
+    booktitle = "Proceedings of the 2024 Conference of the North American Chapter of the Association for Computational Linguistics: Human Language Technologies (Volume 1: Long Papers)",
+    month = jun,
+    year = "2024",
+    address = "Mexico City, Mexico",
+    publisher = "Association for Computational Linguistics",
+    url = "https://aclanthology.org/2024.naacl-long.289",
+    pages = "5168--5182",
+    abstract = "Generative linguistic steganography attempts to hide secret messages into covertext. Previous studies have generally focused on the statistical differences between the covertext and stegotext, however, ill-formed stegotext can readily be identified by humans. In this paper, we propose a novel zero-shot approach based on in-context learning for linguistic steganography to achieve better perceptual and statistical imperceptibility. We also design several new metrics and reproducible language evaluations to measure the imperceptibility of the stegotext. Our experimental results indicate that our method produces $1.926\times$ more innocent and intelligible stegotext than any other method.",
+}
+```
