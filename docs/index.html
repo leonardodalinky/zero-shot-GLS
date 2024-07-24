@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="utf-8">
+  <!-- Meta tags for social media banners, these should be filled in appropriatly as they are your "business card" -->
+  <!-- Replace the content tag with appropriate information -->
+  <meta name="description"
+    content="ZGLS: A novel approach to achieve zero-shot linguistic steganography in public channels.">
+  <meta property="og:title" content="Zero-shot Generative Linguistic Steganography" />
+  <meta property="og:description"
+    content="ZGLS: A novel approach to achieve zero-shot linguistic steganography in public channels." />
+  <meta property="og:url" content="https://leonardodalinky.github.io/zero-shot-GLS" />
+  <!-- Path to banner image, should be in the path listed below. Optimal dimenssions are 1200X630-->
+  <meta property="og:image" content="https://leonardodalinky.github.io/zero-shot-GLS/static/images/zgls-Intro.jpg" />
+  <meta property="og:image:width" content="431" />
+  <meta property="og:image:height" content="305" />
+
+
+  <meta name="twitter:title" content="Zero-shot Generative Linguistic Steganography">
+  <meta name="twitter:description"
+    content="ZGLS: A novel approach to achieve zero-shot linguistic steganography in public channels.">
+  <!-- Path to banner image, should be in the path listed below. Optimal dimenssions are 1200X600-->
+  <meta name="twitter:image" content="https://leonardodalinky.github.io/zero-shot-GLS/static/images/zgls-Intro.jpg">
+  <meta name="twitter:card" content="summary_large_image">
+  <!-- Keywords for your paper to be indexed by-->
+  <meta name="keywords" content="steganography,zero-shot,natural language processing">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+
+  <title>Zero-shot Generative Linguistic Steganography</title>
+  <link rel="icon" type="image/x-icon" href="static/images/favicon.ico">
+  <link href="https://fonts.googleapis.com/css?family=Google+Sans|Noto+Sans|Castoro" rel="stylesheet">
+
+  <link rel="stylesheet" href="static/css/bulma.min.css">
+  <link rel="stylesheet" href="static/css/bulma-carousel.min.css">
+  <link rel="stylesheet" href="static/css/bulma-slider.min.css">
+  <link rel="stylesheet" href="static/css/fontawesome.all.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/jpswalsh/academicons@1/css/academicons.min.css">
+  <link rel="stylesheet" href="static/css/index.css">
+
+  <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+  <script src="https://documentcloud.adobe.com/view-sdk/main.js"></script>
+  <script defer src="static/js/fontawesome.all.min.js"></script>
+  <script src="static/js/bulma-carousel.min.js"></script>
+  <script src="static/js/bulma-slider.min.js"></script>
+  <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+  <script src="static/js/index.js"></script>
+</head>
+
+<body>
+
+
+  <section class="hero">
+    <div class="hero-body">
+      <div class="container is-max-desktop">
+        <div class="columns is-centered">
+          <div class="column has-text-centered">
+            <h1 class="title is-2 publication-title">Zero-shot Generative Linguistic Steganography</h1>
+            <div class="is-size-5 publication-authors">
+              <!-- Paper authors -->
+              <span class="author-block">
+                <a href="https://leonardodalinky.github.io/researcher" target="_blank">Ke Lin</a><sup>1</sup>,
+              </span>
+              <span class="author-block">
+                <a href="https://mrtater.github.io/" target="_blank">Yiyang Luo</a><sup>2</sup>,
+              </span>
+              <span class="author-block">
+                <a href="https://github.com/naijnaur93" target="_blank">Zijian Zhang</a><sup>1</sup>,
+              </span>
+              <span class="author-block">
+                <a href="https://www.thss.tsinghua.edu.cn/en/faculty/pingluo.htm" target="_blank">Ping
+                  Luo</a><sup>1</sup>
+              </span>
+            </div>
+
+            <div class="is-size-5 publication-authors">
+              <span class="author-block"><sup>1</sup>Tsinghua University,</span>
+              <span class="author-block"><sup>2</sup>Nanyang Technological University</span>
+              <br>
+              <span class="author-block">NAACL '24</span>
+              <!-- <span class="eql-cntrb"><small><br><sup>*</sup>Equal Contribution</small></span> -->
+            </div>
+
+            <div class="column has-text-centered">
+              <div class="publication-links">
+                <!-- Arxiv PDF link -->
+                <span class="link-block">
+                  <a href="https://aclanthology.org/2024.naacl-long.289.pdf" target="_blank"
+                    class="external-link button is-normal is-rounded is-dark">
+                    <span class="icon">
+                      <i class="fas fa-file-pdf"></i>
+                    </span>
+                    <span>Paper</span>
+                  </a>
+                </span>
+
+                <!-- Supplementary PDF link -->
+                <!-- <span class="link-block">
+                  <a href="static/pdfs/MM2024_CaIPCG_sup.pdf" target="_blank"
+                    class="external-link button is-normal is-rounded is-dark">
+                    <span class="icon">
+                      <i class="fas fa-file-pdf"></i>
+                    </span>
+                    <span>Supplementary</span>
+                  </a>
+                </span> -->
+
+                <!-- Github link -->
+                <span class="link-block">
+                  <a href="https://github.com/leonardodalinky/zero-shot-GLS" target="_blank"
+                    class="external-link button is-normal is-rounded is-dark">
+                    <span class="icon">
+                      <i class="fab fa-github"></i>
+                    </span>
+                    <span>Code</span>
+                  </a>
+                </span>
+
+                <!-- ArXiv abstract Link -->
+                <span class="link-block">
+                  <a href="https://arxiv.org/abs/2403.10856" target="_blank"
+                    class="external-link button is-normal is-rounded is-dark">
+                    <span class="icon">
+                      <i class="ai ai-arxiv"></i>
+                    </span>
+                    <span>arXiv</span>
+                  </a>
+                </span>
+
+                <!-- Dataset Link -->
+                <span class="link-block">
+                  <a href="https://github.com/leonardodalinky/zero-shot-GLS/tree/main/datasets" target="_blank"
+                    class="external-link button is-normal is-rounded is-dark">
+                    <span class="icon">
+                      <i class="fab fa-github"></i>
+                    </span>
+                    <span>Dataset</span>
+                  </a>
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+
+  <!-- Teaser video-->
+  <!-- <section class="hero teaser">
+    <div class="container is-max-desktop">
+      <div class="hero-body">
+        <video poster="" id="tree" autoplay controls muted loop height="100%">
+          <source src="static/videos/banner_video.mp4" type="video/mp4">
+        </video>
+        <h2 class="subtitle has-text-centered">
+          Aliquam vitae elit ullamcorper tellus egestas pellentesque. Ut lacus tellus, maximus vel lectus at, placerat
+          pretium mi. Maecenas dignissim tincidunt vestibulum. Sed consequat hendrerit nisl ut maximus.
+        </h2>
+      </div>
+    </div>
+  </section> -->
+  <!-- End teaser video -->
+
+  <!-- Paper abstract -->
+  <section class="section hero is-light">
+    <div class="container is-max-desktop">
+      <div class="columns is-centered has-text-centered">
+        <div class="column is-four-fifths">
+          <h2 class="title is-4 has-text-centered">Abstract</h2>
+          <div class="content has-text-justified">
+            <p>
+              Generative linguistic steganography attempts to hide secret messages into covertext.
+              Previous studies have generally focused on the statistical differences between the covertext and
+              stegotext, however, ill-formed stegotext can readily be identified by humans.
+              In this paper, we propose a novel zero-shot approach based on in-context learning for linguistic
+              steganography to achieve better perceptual and statistical imperceptibility.
+              We also design several new metrics and reproducible language evaluations to measure the imperceptibility
+              of the stegotext.
+              Our experimental results indicate that our method produces \(1.926\times\) more innocent and intelligible
+              stegotext than any other method.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+  <!-- End paper abstract -->
+
+
+  <!-- Image carousel -->
+  <!-- <section class="hero is-small">
+    <div class="hero-body">
+      <div class="container">
+        <div id="results-carousel" class="carousel results-carousel">
+          <div class="item">
+            <img src="static/images/carousel1.jpg" alt="MY ALT TEXT" />
+            <h2 class="subtitle has-text-centered">
+              First image description.
+            </h2>
+          </div>
+          <div class="item">
+            <img src="static/images/carousel2.jpg" alt="MY ALT TEXT" />
+            <h2 class="subtitle has-text-centered">
+              Second image description.
+            </h2>
+          </div>
+          <div class="item">
+            <img src="static/images/carousel3.jpg" alt="MY ALT TEXT" />
+            <h2 class="subtitle has-text-centered">
+              Third image description.
+            </h2>
+          </div>
+          <div class="item">
+            <img src="static/images/carousel4.jpg" alt="MY ALT TEXT" />
+            <h2 class="subtitle has-text-centered">
+              Fourth image description.
+            </h2>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section> -->
+  <!-- End image carousel -->
+
+
+
+
+  <!-- Youtube video -->
+  <!-- <section class="hero is-small is-light">
+    <div class="hero-body">
+      <div class="container">
+        <h2 class="title is-3">Video Presentation</h2>
+        <div class="columns is-centered has-text-centered">
+          <div class="column is-four-fifths">
+
+            <div class="publication-video">
+              <iframe src="https://www.youtube.com/embed/JkaxUblCGz0" frameborder="0" allow="autoplay; encrypted-media"
+                allowfullscreen></iframe>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section> -->
+  <!-- End youtube video -->
+
+
+  <!-- Video carousel -->
+  <!-- <section class="hero is-small">
+    <div class="hero-body">
+      <div class="container">
+        <h2 class="title is-3">Another Carousel</h2>
+        <div id="results-carousel" class="carousel results-carousel">
+          <div class="item item-video1">
+            <video poster="" id="video1" autoplay controls muted loop height="100%">
+              <source src="static/videos/carousel1.mp4" type="video/mp4">
+            </video>
+          </div>
+          <div class="item item-video2">
+            <video poster="" id="video2" autoplay controls muted loop height="100%">
+              <source src="static/videos/carousel2.mp4" type="video/mp4">
+            </video>
+          </div>
+          <div class="item item-video3">
+            <video poster="" id="video3" autoplay controls muted loop height="100%">\
+              <source src="static/videos/carousel3.mp4" type="video/mp4">
+            </video>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section> -->
+  <!-- End video carousel -->
+
+  <section class="section hero is-small">
+    <div class="container is-max-desktop">
+      <div class="columns is-centered">
+        <div class="column is-full">
+          <h2 class="title is-4 has-text-centered">Summary</h2>
+          <div class="content">
+            <div class="has-text-justified">
+              <img src=" static/images/zgls-Intro.svg" alt="ZGLS Overview" class="center-image" width="50%" />
+              <br>
+              <p>
+                In summary, the contributions of our work are as follows:
+              <ul>
+                <li>We present a zero-shot approach for linguistic steganography based on in-context learning using
+                  samples of the covertext.
+                </li>
+                <li>We improve both the binary coding process and the embedding process by introducing several novel
+                  techniques.</li>
+                <li>We design several metrics and language evaluations to evaluate both the perceptual and statistical
+                  imperceptibility, whereas our method produces more innocent and intelligible stegotext compared to all
+                  the previous methods.</li>
+              </ul>
+              </p>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+    </div>
+  </section>
+
+
+  <section class="hero is-small is-light">
+    <div class="hero-body">
+      <div class="container  is-max-desktop">
+        <h2 class="title is-4 has-text-centered">Methodology</h2>
+        <div class="has-text-justified">
+          <img src="static/images/zgls-EF_compact.svg" alt="Overview of EF coding" class="center-image" width="50%" />
+          <br>
+          <div class="has-text-centered">
+            <strong><em>Edge Flipping Coding</em></strong>
+            <p>
+              An efficient and effective coding method that increase hidden message embedding rate.
+            </p>
+          </div>
+          <hr style="background-color: #e5e5e5;" />
+          <img src="static/images/zgls-GenWithPrompt.svg" alt="Overview of stega-text generation process"
+            class="center-image" width="90%" />
+          <br>
+          <div class="has-text-centered">
+            <strong><em>In-context Stegotext Generation</em></strong>
+            <p>
+              In-context stegotext generation guided by Huffman Tree constructed using the covert bitstream.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+    </div>
+  </section>
+
+
+
+  <section class="section hero is-small">
+    <div class="container is-max-desktop">
+      <div class="columns is-centered">
+        <div class="column is-full">
+          <div class="content">
+            <h2 class="title is-4 has-text-centered">Experiments</h2>
+            <img src="static/images/zgls-tab1.png" alt="Experimental results under different BPWs and datasets"
+              class="center-image" width="90%" />
+            <br>
+            <div class="has-text-centered">
+              <strong><em>Experimental results under different BPWs and datasets</em></strong>
+              <p>
+                Our proposed method shows a reduced Perceptual-Statistical Imperceptibility Conflict Effect
+                (<strong>Psic
+                  Effect</strong>) in comparison to prior methods as our JSDs rise with
+                increasing BPW, whereas other methods see a decrease in JSDs.
+              </p>
+            </div>
+            <hr />
+            <img src="static/images/zgls-tab3.png" alt="Steganalysis" class="center-image" width="40%" />
+            <br>
+            <div class="has-text-centered">
+              <strong><em>Steganalysis</em></strong>
+              <p>
+                Each value is the classification accuracy by steganalyzer. Lower accuracy \(\downarrow\) indicates
+                better statistical imperceptibility.
+              </p>
+            </div>
+            <hr />
+            <img src="static/images/zgls-tab4.png" alt="Language Evaluation" class="center-image" width="45%" />
+            <br>
+            <div class="has-text-centered">
+              <strong><em>Language Evaluation</em></strong>
+              <p>
+                Each value represents the ratio of how much our stegotext is considered better than the particular
+                method.
+              </p>
+            </div>
+            <hr />
+            <img src="static/images/zgls-example.png" alt="Stegotext Examples" class="center-image" width="90%" />
+            <br>
+            <div class="has-text-centered">
+              <strong><em>Stegotext Examples</em></strong>
+              <p>
+                Compared with other baseline methods, our method generates more reasonable sentences.
+              </p>
+            </div>
+            <!-- <div class="container mt-4">
+              <div class="alert alert-danger" role="alert">
+                <strong>Implications:</strong> SoTA LLMs that use LoRA for alignment fine-tuning are vulnerable to
+                Pre-FT weight recovery attacks
+              </div>
+            </div> -->
+          </div>
+        </div>
+      </div>
+  </section>
+
+
+
+
+  <!-- Paper poster -->
+  <section class="hero is-small is-light">
+    <div class="hero-body">
+      <div class="container">
+        <h2 class="title">Poster</h2>
+
+        <iframe src="static/pdfs/ZGLS_Poster.pdf" width="100%" height="600">
+        </iframe>
+
+      </div>
+    </div>
+  </section>
+  <!--End paper poster -->
+
+
+  <!--BibTex citation -->
+  <section class="section" id="BibTeX">
+    <div class="container is-max-desktop content">
+      <h2 class="title">BibTeX</h2>
+      <pre><code>
+@inproceedings{lin2024zgls,
+  title = "Zero-shot Generative Linguistic Steganography",
+  author = "Lin, Ke  and
+    Luo, Yiyang  and
+    Zhang, Zijian  and
+    Ping, Luo",
+  editor = "Duh, Kevin  and
+    Gomez, Helena  and
+    Bethard, Steven",
+  booktitle = "Proceedings of the 2024 Conference of the North American Chapter of the Association for Computational Linguistics: Human Language Technologies (Volume 1: Long Papers)",
+  month = jun,
+  year = "2024",
+  address = "Mexico City, Mexico",
+  publisher = "Association for Computational Linguistics",
+  url = "https://aclanthology.org/2024.naacl-long.289",
+  pages = "5168--5182",
+}
+      </code></pre>
+    </div>
+  </section>
+  <!--End BibTex citation -->
+
+
+  <footer class="footer">
+    <div class="container">
+      <div class="columns is-centered">
+        <div class="column is-8">
+          <div class="content">
+            <p>
+              This page was modified by K. Lin using the <a
+                href="https://github.com/eliahuhorwitz/Academic-project-page-template" target="_blank">Academic Project
+                Page Template</a> which was adopted from the <a href="https://nerfies.github.io"
+                target="_blank">Nerfies</a> project page.
+              This website is licensed under a <a rel="license" href="http://creativecommons.org/licenses/by-sa/4.0/"
+                target="_blank">Creative
+                Commons Attribution-ShareAlike 4.0 International License</a>.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </footer>
+
+  <!-- Statcounter tracking code -->
+
+  <!-- You can add a tracker to track page visits by creating an account at statcounter.com -->
+
+  <!-- End of Statcounter Code -->
+
+</body>
+
+</html>
