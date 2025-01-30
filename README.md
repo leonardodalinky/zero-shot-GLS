@@ -64,5 +64,6 @@ For details of metrics, steganalysis, and language evaluation, check [evaluate/]
     publisher = "Association for Computational Linguistics",
     url = "https://aclanthology.org/2024.naacl-long.289",
     pages = "5168--5182",
+    doi = "10.18653/v1/2024.naacl-long.289"
 }
 ```
